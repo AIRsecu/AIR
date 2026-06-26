@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.UserMapper">
+
+    <resultMap id="UserRM" type="com.shop.domain.User">
+        <id     property="id"           column="id"/>
+        <result property="username"     column="username"/>
+        <result property="passwordHash" column="password_hash"/>
+        <result property="role"         column="role"/>
+        <result property="displayName"  column="display_name"/>
+        <result property="isActive"     column="is_active"/>
+        <result property="tenantId"     column="tenant_id"/>
+        <result property="balance"      column="balance"/>
+        <result property="lastLoginAt"  column="last_login_at"/>
+        <result property="createdAt"    column="created_at"/>
+        <result property="updatedAt"    column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.User">
+        INSERT INTO users
+            (id, username, password_hash, role, display_name, is_active, tenant_id, created_at, updated_at)
+        VALUES
+            (#{id}, #{username}, #{passwordHash}, #{role}, #{displayName},
+             #{isActive}, #{tenantId}, datetime('now'), datetime('now'))
+    </insert>
+
+    <select id="findById" resultMap="UserRM">
+        SELECT * FROM users
+        WHERE id = #{id} AND deleted_at IS NULL
+    </select>
+
+    <select id="findByUsername" resultMap="UserRM">
+        SELECT * FROM users
+        WHERE username = #{username} AND deleted_at IS NULL
+    </select>
+
+    <select id="findAll" resultMap="UserRM">
+        SELECT * FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC
+    </select>
+
+    <select id="findByTenantId" resultMap="UserRM">
+        SELECT * FROM users
+        WHERE tenant_id = #{tenantId} AND deleted_at IS NULL
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="update" parameterType="com.shop.domain.User">
+        UPDATE users SET
+            password_hash = #{passwordHash},
+            role          = #{role},
+            display_name  = #{displayName},
+            is_active     = #{isActive},
+            tenant_id     = #{tenantId},
+            updated_at    = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePasswordHash">
+        UPDATE users SET
+            password_hash = #{passwordHash},
+            updated_at    = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <update id="softDelete">
+        UPDATE users SET deleted_at = datetime('now') WHERE id = #{id}
+    </update>
+
+    <select id="countByUsername" resultType="int">
+        SELECT COUNT(*) FROM users
+        WHERE username = #{username} AND deleted_at IS NULL
+    </select>
+
+    <update id="updateLastLoginAt">
+        UPDATE users SET last_login_at = datetime('now') WHERE id = #{id}
+    </update>
+
+    <!-- 잔액 충전/환불 (가산) -->
+    <update id="addBalance">
+        UPDATE users SET balance = balance + #{amount}, updated_at = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <!-- 잔액 차감 (원자적: 잔액 >= 금액일 때만, 영향행수 반환) -->
+    <update id="deductBalance">
+        UPDATE users SET balance = balance - #{amount}, updated_at = datetime('now')
+        WHERE id = #{id} AND balance >= #{amount}
+    </update>
+
+</mapper>

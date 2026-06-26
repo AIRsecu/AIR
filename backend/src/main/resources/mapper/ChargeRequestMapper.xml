@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.ChargeRequestMapper">
+
+    <resultMap id="ChargeRM" type="com.shop.domain.ChargeRequest">
+        <id     property="id"           column="id"/>
+        <result property="tenantId"     column="tenant_id"/>
+        <result property="userId"       column="user_id"/>
+        <result property="username"     column="username"/>
+        <result property="amount"       column="amount"/>
+        <result property="status"       column="status"/>
+        <result property="rejectReason" column="reject_reason"/>
+        <result property="reviewedBy"   column="reviewed_by"/>
+        <result property="reviewedAt"   column="reviewed_at"/>
+        <result property="createdAt"    column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.ChargeRequest">
+        INSERT INTO charge_requests
+            (id, tenant_id, user_id, username, amount, status, created_at)
+        VALUES
+            (#{id}, #{tenantId}, #{userId}, #{username}, #{amount}, #{status}, datetime('now'))
+    </insert>
+
+    <select id="findById" resultMap="ChargeRM">
+        SELECT * FROM charge_requests WHERE id = #{id}
+    </select>
+
+    <select id="findByTenant" resultMap="ChargeRM">
+        SELECT * FROM charge_requests WHERE tenant_id = #{tenantId} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByTenantAndStatus" resultMap="ChargeRM">
+        SELECT * FROM charge_requests
+        WHERE tenant_id = #{tenantId} AND status = #{status}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findByUser" resultMap="ChargeRM">
+        SELECT * FROM charge_requests WHERE user_id = #{userId} ORDER BY created_at DESC
+    </select>
+
+    <select id="countPendingByTenant" resultType="int">
+        SELECT COUNT(*) FROM charge_requests WHERE tenant_id = #{tenantId} AND status = 'pending'
+    </select>
+
+    <update id="updateStatus">
+        UPDATE charge_requests SET
+            status        = #{status},
+            reviewed_by   = #{reviewedBy},
+            reject_reason = #{rejectReason},
+            reviewed_at   = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+</mapper>

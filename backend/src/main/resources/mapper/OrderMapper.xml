@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.OrderMapper">
+
+    <resultMap id="OrderRM" type="com.shop.domain.Order">
+        <id     property="id"          column="id"/>
+        <result property="tenantId"    column="tenant_id"/>
+        <result property="customerId"  column="customer_id"/>
+        <result property="status"      column="status"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="createdAt"   column="created_at"/>
+        <result property="updatedAt"   column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="OrderItemRM" type="com.shop.domain.OrderItem">
+        <id     property="id"        column="id"/>
+        <result property="orderId"   column="order_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="quantity"  column="quantity"/>
+        <result property="unitPrice" column="unit_price"/>
+    </resultMap>
+
+    <insert id="insertOrder" parameterType="com.shop.domain.Order">
+        INSERT INTO orders
+            (id, tenant_id, customer_id, status, total_amount, created_at, updated_at)
+        VALUES
+            (#{id}, #{tenantId}, #{customerId}, #{status}, #{totalAmount},
+             datetime('now'), datetime('now'))
+    </insert>
+
+    <insert id="insertOrderItem" parameterType="com.shop.domain.OrderItem">
+        INSERT INTO order_items (id, order_id, product_id, quantity, unit_price)
+        VALUES (#{id}, #{orderId}, #{productId}, #{quantity}, #{unitPrice})
+    </insert>
+
+    <select id="findById" resultMap="OrderRM">
+        SELECT * FROM orders WHERE id = #{id}
+    </select>
+
+    <select id="findByTenantId" resultMap="OrderRM">
+        SELECT * FROM orders
+        WHERE tenant_id = #{tenantId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findByCustomerId" resultMap="OrderRM">
+        SELECT * FROM orders
+        WHERE customer_id = #{customerId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findItemsByOrderId" resultMap="OrderItemRM">
+        SELECT * FROM order_items WHERE order_id = #{orderId}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE orders SET
+            status     = #{status},
+            updated_at = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <select id="countByTenantAndStatus" resultType="int">
+        SELECT COUNT(*) FROM orders WHERE tenant_id = #{tenantId} AND status = #{status}
+    </select>
+
+</mapper>

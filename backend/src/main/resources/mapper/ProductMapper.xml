@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.ProductMapper">
+
+    <resultMap id="ProductRM" type="com.shop.domain.Product">
+        <id     property="id"          column="id"/>
+        <result property="tenantId"    column="tenant_id"/>
+        <result property="name"        column="name"/>
+        <result property="description" column="description"/>
+        <result property="price"       column="price"/>
+        <result property="stock"       column="stock"/>
+        <result property="category"    column="category"/>
+        <result property="imageUrl"    column="image_url"/>
+        <result property="isActive"    column="is_active"/>
+        <result property="createdAt"   column="created_at"/>
+        <result property="updatedAt"   column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.Product">
+        INSERT INTO products
+            (id, tenant_id, name, description, price, stock, category, image_url, is_active, created_at, updated_at)
+        VALUES
+            (#{id}, #{tenantId}, #{name}, #{description}, #{price}, #{stock},
+             #{category}, #{imageUrl}, #{isActive}, datetime('now'), datetime('now'))
+    </insert>
+
+    <select id="findById" resultMap="ProductRM">
+        SELECT * FROM products WHERE id = #{id} AND deleted_at IS NULL
+    </select>
+
+    <select id="findByTenantId" resultMap="ProductRM">
+        SELECT * FROM products
+        WHERE tenant_id = #{tenantId} AND deleted_at IS NULL
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findActiveByTenantId" resultMap="ProductRM">
+        SELECT * FROM products
+        WHERE tenant_id = #{tenantId} AND is_active = 1 AND deleted_at IS NULL
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="update" parameterType="com.shop.domain.Product">
+        UPDATE products SET
+            name        = #{name},
+            description = #{description},
+            price       = #{price},
+            stock       = #{stock},
+            category    = #{category},
+            image_url   = #{imageUrl},
+            is_active   = #{isActive},
+            updated_at  = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <update id="softDelete">
+        UPDATE products SET deleted_at = datetime('now') WHERE id = #{id}
+    </update>
+
+    <!-- 주문 시 재고 차감 (낙관적 음수 방지) -->
+    <update id="decreaseStock">
+        UPDATE products SET
+            stock      = stock - #{qty},
+            updated_at = datetime('now')
+        WHERE id = #{id} AND stock >= #{qty}
+    </update>
+
+    <!-- 주문 취소 시 재고 복원 -->
+    <update id="increaseStock">
+        UPDATE products SET
+            stock      = stock + #{qty},
+            updated_at = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+</mapper>

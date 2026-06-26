@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.AuditLogMapper">
+
+    <resultMap id="AuditLogRM" type="com.shop.domain.AuditLog">
+        <id     property="id"            column="id"/>
+        <result property="actorId"       column="actor_id"/>
+        <result property="actorUsername" column="actor_username"/>
+        <result property="tenantId"      column="tenant_id"/>
+        <result property="action"        column="action"/>
+        <result property="resourceType"  column="resource_type"/>
+        <result property="resourceId"    column="resource_id"/>
+        <result property="detail"        column="detail"/>
+        <result property="ipAddress"     column="ip_address"/>
+        <result property="createdAt"     column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.AuditLog">
+        INSERT INTO audit_logs
+            (id, actor_id, actor_username, tenant_id, action,
+             resource_type, resource_id, detail, ip_address, created_at)
+        VALUES
+            (#{id}, #{actorId}, #{actorUsername}, #{tenantId}, #{action},
+             #{resourceType}, #{resourceId}, #{detail}, #{ipAddress}, datetime('now'))
+    </insert>
+
+    <select id="findByActorId" resultMap="AuditLogRM">
+        SELECT * FROM audit_logs
+        WHERE actor_id = #{actorId}
+        ORDER BY created_at DESC
+        LIMIT 200
+    </select>
+
+    <select id="findByTenantId" resultMap="AuditLogRM">
+        SELECT * FROM audit_logs
+        WHERE tenant_id = #{tenantId}
+        ORDER BY created_at DESC
+        LIMIT 200
+    </select>
+
+    <select id="findByResourceId" resultMap="AuditLogRM">
+        SELECT * FROM audit_logs
+        WHERE resource_id = #{resourceId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRecent" resultMap="AuditLogRM">
+        SELECT * FROM audit_logs
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
