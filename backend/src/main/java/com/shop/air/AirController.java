@@ -47,6 +47,16 @@ public class AirController {
         return ResponseEntity.ok(ApiResponse.ok(incidentService.recent(limit)));
     }
 
+    /** 외부 오케스트레이터가 자동 소스패치 결과를 기록 — status=PATCHED|FAILED, action=설명 */
+    @PostMapping("/incidents/{id}/status")
+    public ResponseEntity<ApiResponse<Void>> incidentStatus(
+            @PathVariable String id, @RequestParam String status,
+            @RequestParam(required = false) String action, @AuthenticationPrincipal User actor) {
+        requireSuper(actor);
+        incidentService.updateStatus(id, status, action);
+        return ResponseEntity.ok(ApiResponse.ok());
+    }
+
     private static void requireSuper(User actor) {
         if (actor == null || !actor.isSuperAdmin())
             throw AppException.forbidden("super_admin 만 접근할 수 있습니다.");

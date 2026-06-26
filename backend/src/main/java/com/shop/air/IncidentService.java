@@ -46,10 +46,18 @@ public class IncidentService {
                 .build();
         incidentMapper.insert(inc);
 
-        // TODO [5단계] 비동기 소스 패치 트리거: triggerAutoPatch(type, defenseKey, payload)
+        // [5단계] 비동기 소스 패치는 별도 오케스트레이터(air-orchestrator/responder.py)가
+        // 이 인시던트를 폴링 → Claude API 패치 생성 → 검증 → 커밋 후
+        // POST /air/incidents/{id}/status 로 PATCHED/FAILED 를 기록한다.
     }
 
     public List<SecurityIncident> recent(int limit) { return incidentMapper.findRecent(limit); }
+
+    /** 외부 오케스트레이터가 자동 소스패치 결과를 반영 (PATCHED / FAILED). */
+    public void updateStatus(String id, String status, String actionTaken) {
+        incidentMapper.updateStatus(id, status, actionTaken);
+        log.info("[AIR] incident {} -> {} ({})", id, status, actionTaken);
+    }
 
     private static String truncate(String s) {
         if (s == null) return null;
