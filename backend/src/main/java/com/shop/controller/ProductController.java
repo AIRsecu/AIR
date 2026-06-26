@@ -53,7 +53,7 @@ public class ProductController {
     public ResponseEntity<ApiResponse<Product>> update(
             @PathVariable String tenantId,
             @PathVariable String id,
-            @RequestBody UpdateProductRequest req,
+            @Valid @RequestBody UpdateProductRequest req,
             @AuthenticationPrincipal User actor) {
         return ResponseEntity.ok(ApiResponse.ok(productService.update(id, req, actor)));
     }

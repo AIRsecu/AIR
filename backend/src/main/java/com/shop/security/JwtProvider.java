@@ -32,11 +32,24 @@ public class JwtProvider {
             @Value("${jwt.super-access-ttl-hours}")  long superAccessHours,
             @Value("${jwt.refresh-ttl-hours}")       long refreshHours
     ) {
+        requireStrongSecret("jwt.access-secret", accessSecret);
+        requireStrongSecret("jwt.refresh-secret", refreshSecret);
         this.accessKey        = Keys.hmacShaKeyFor(accessSecret.getBytes(StandardCharsets.UTF_8));
         this.refreshKey       = Keys.hmacShaKeyFor(refreshSecret.getBytes(StandardCharsets.UTF_8));
         this.accessTtlMs      = accessMinutes    * 60   * 1000L;
         this.superAccessTtlMs = superAccessHours * 3600 * 1000L;
         this.refreshTtlMs     = refreshHours     * 3600 * 1000L;
+    }
+
+    /** 기본/약한 시크릿 거부 (fail-closed): "change-me" 포함 또는 32바이트 미만이면 기동 실패 */
+    private static void requireStrongSecret(String name, String secret) {
+        if (secret == null
+                || secret.toLowerCase().contains("change-me")
+                || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                name + " 가 안전하지 않습니다(기본값/약한 값). 32바이트 이상의 랜덤 시크릿을 "
+                + "환경변수로 설정하세요. 운영은 64바이트 이상 권장.");
+        }
     }
 
     // ── Access Token ──────────────────────────────────────────────

@@ -62,7 +62,9 @@ public class UserController {
         if (!actor.isSuperAdmin())
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
-        User.Role role = User.Role.valueOf(body.getOrDefault("role", "customer"));
+        User.Role role;
+        try { role = User.Role.valueOf(body.getOrDefault("role", "customer")); }
+        catch (IllegalArgumentException e) { throw AppException.badRequest("유효하지 않은 역할입니다."); }
         User user = userService.create(
                 body.get("username"),
                 body.get("password"),

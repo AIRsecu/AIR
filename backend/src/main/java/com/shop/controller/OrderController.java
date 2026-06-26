@@ -40,8 +40,10 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Order>> get(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.ok(orderService.getById(id)));
+    public ResponseEntity<ApiResponse<Order>> get(
+            @PathVariable String id,
+            @AuthenticationPrincipal User actor) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.getByIdAuthorized(id, actor)));
     }
 
     /** customer – 주문 생성 */

@@ -37,6 +37,8 @@ public class UserService {
                        String tenantId) {
         if (userMapper.countByUsername(username) > 0)
             throw AppException.conflict("이미 사용 중인 사용자명입니다: " + username);
+        if (rawPassword == null || rawPassword.length() < 8)
+            throw AppException.badRequest("비밀번호는 8자 이상이어야 합니다.");
 
         // super_admin 은 전역(null), admin/customer 는 소속 테넌트 필수
         String effectiveTenantId = tenantId;

@@ -19,6 +19,7 @@ public class User {
 
     private String id;
     private String username;
+    @JsonIgnore
     private String passwordHash;
     private Role   role;
     private String displayName;

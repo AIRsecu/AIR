@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -26,16 +28,26 @@ public class AuthService {
     private final JwtProvider        jwt;
     private final PasswordEncoder    encoder;
 
+    // ── 로그인 brute-force 방어 (인메모리: username 기준 실패 카운트/잠금) ──
+    private static final int  MAX_FAIL  = 5;
+    private static final long LOCK_SEC  = 300;   // 5분 잠금
+    private final Map<String, long[]> loginState = new ConcurrentHashMap<>(); // key -> [failCount, lockUntilEpoch]
+
     @Transactional
     public LoginResponse login(LoginRequest req, String userAgent) {
-        User user = userMapper.findByUsername(req.username())
-                .orElseThrow(() -> AppException.unauthorized("아이디 또는 비밀번호가 올바르지 않습니다."));
+        final String key = req.username() == null ? "" : req.username().toLowerCase();
 
-        if (!user.isActive())
-            throw AppException.forbidden("비활성화된 계정입니다.");
+        long[] st = loginState.get(key);
+        if (st != null && st[1] > Instant.now().getEpochSecond())
+            throw AppException.unauthorized("로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.");
 
-        if (!encoder.matches(req.password(), user.getPasswordHash()))
+        User user = userMapper.findByUsername(req.username()).orElse(null);
+        // 존재/비활성/비번오류를 동일 401·동일 메시지로 통일 (계정 enumeration 완화)
+        if (user == null || !user.isActive() || !encoder.matches(req.password(), user.getPasswordHash())) {
+            registerFailure(key);
             throw AppException.unauthorized("아이디 또는 비밀번호가 올바르지 않습니다.");
+        }
+        loginState.remove(key);   // 성공 시 카운터 초기화
 
         userMapper.updateLastLoginAt(user.getId());
 
@@ -100,5 +112,15 @@ public class AuthService {
         String hash = jwt.hashRefresh(rawToken);
         tokenMapper.findByTokenHash(hash)
                 .ifPresent(t -> tokenMapper.revoke(t.getId(), null));
+    }
+
+    /** 로그인 실패 누적 → 임계치 도달 시 일정 시간 잠금 */
+    private void registerFailure(String key) {
+        long[] s = loginState.computeIfAbsent(key, k -> new long[]{0, 0});
+        s[0] += 1;
+        if (s[0] >= MAX_FAIL) {
+            s[1] = Instant.now().getEpochSecond() + LOCK_SEC;
+            s[0] = 0;
+        }
     }
 }

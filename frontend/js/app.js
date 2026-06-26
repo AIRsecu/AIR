@@ -1159,7 +1159,7 @@ function errPage(e) {
   const expired = (e.status === 401 || e.status === 403) && !/권한/.test(e.message || '');
   return `<div class="card"><div class="err-box show" style="margin:0">
     <strong>요청 실패:</strong> ${esc(e.message)}
-    ${expired ? '<div style="margin-top:6px"><a href="#/login" onclick="API.clearAuth()">다시 로그인하기</a></div>' : ''}
+    ${expired ? '<div style="margin-top:6px"><a href="#/login" data-clear-auth>다시 로그인하기</a></div>' : ''}
   </div></div>`;
 }
 
@@ -1198,6 +1198,12 @@ function router() {
     location.hash = defaultRoute();
   }
 }
+
+// 인라인 onclick 대체(엄격 CSP 호환): 세션 만료 '다시 로그인하기' 처리
+document.addEventListener('click', (e) => {
+  const t = e.target.closest && e.target.closest('[data-clear-auth]');
+  if (t) API.clearAuth();
+});
 
 window.addEventListener('hashchange', router);
 window.addEventListener('DOMContentLoaded', () => {
