@@ -7,8 +7,10 @@ services:
       dockerfile: Dockerfile
     container_name: shop-backend
     restart: unless-stopped
+    # 외부 직접 접근 차단: nginx(80)만 단일 진입점. 8080은 로컬 디버깅용 loopback 전용.
+    #  (nginx 는 docker 네트워크로 backend:8080 접근 — 호스트 포트 불필요)
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       # JWT 시크릿 (운영 시 반드시 교체)
       - SPRING_APPLICATION_NAME=multitenant-shop
