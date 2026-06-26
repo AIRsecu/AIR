@@ -79,9 +79,11 @@ const API = (() => {
 
     if (!res.ok) {
       const code = json?.code || ('HTTP_' + res.status);
+      // 토큰 만료 시 인증 필터가 통과 못 해 본문 없는 401/403 이 옴 → 재로그인 안내
+      const sessionExpired = '캐시가 만료되었습니다. 다시 로그인 하시면 됩니다.';
       const msg  = json?.message
-        || (res.status === 403 ? '권한이 없습니다.' : null)
-        || (res.status === 401 ? '인증이 필요합니다.' : null)
+        || (res.status === 403 ? sessionExpired : null)
+        || (res.status === 401 ? sessionExpired : null)
         || ('요청 실패 (HTTP ' + res.status + ')');
       throw new ApiError(res.status, code, msg);
     }

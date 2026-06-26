@@ -1156,9 +1156,10 @@ async function viewWallet() {
 
 // ── 에러 페이지 ───────────────────────────────────────────
 function errPage(e) {
+  const expired = (e.status === 401 || e.status === 403) && !/권한/.test(e.message || '');
   return `<div class="card"><div class="err-box show" style="margin:0">
     <strong>요청 실패:</strong> ${esc(e.message)}
-    ${e.status === 403 ? '<div style="margin-top:6px">이 작업에 대한 권한이 없는 계정입니다.</div>' : ''}
+    ${expired ? '<div style="margin-top:6px"><a href="#/login" onclick="API.clearAuth()">다시 로그인하기</a></div>' : ''}
   </div></div>`;
 }
 

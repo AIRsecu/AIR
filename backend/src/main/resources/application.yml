@@ -23,7 +23,8 @@ mybatis:
 jwt:
   access-secret: change-me-access-secret-min-32chars-padding
   refresh-secret: change-me-refresh-secret-min-32chars-padding
-  access-ttl-minutes: 15
+  access-ttl-minutes: 60
+  super-access-ttl-hours: 120
   refresh-ttl-hours: 168
 
 app:
