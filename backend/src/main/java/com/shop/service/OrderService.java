@@ -5,6 +5,7 @@ import com.shop.domain.OrderItem;
 import com.shop.domain.User;
 import com.shop.dto.order.*;
 import com.shop.exception.AppException;
+import com.shop.air.DefenseRegistry;
 import com.shop.mapper.OrderMapper;
 import com.shop.mapper.ProductMapper;
 import com.shop.mapper.TenantMapper;
@@ -25,6 +26,7 @@ public class OrderService {
     private final ProductMapper productMapper;
     private final UserMapper    userMapper;
     private final TenantMapper  tenantMapper;
+    private final DefenseRegistry defense;   // [AIR] 방어 토글
 
     public List<Order> listByTenant(String tenantId) {
         return orderMapper.findByTenantId(tenantId);
@@ -69,9 +71,11 @@ public class OrderService {
         long total = 0;
         String orderId = UlidUtil.generate();
 
+        // [AIR] order.qty-guard 가 ON 이면 음수수량/오버플로 방어 활성, OFF 면 취약(공격 가능)
+        boolean guard = defense.isEnabled(DefenseRegistry.ORDER_QTY_GUARD);
+
         for (PlaceOrderRequest.ItemLine line : req.items()) {
-            // 서버측 방어: 수량 양수 보장 (검증 우회 대비)
-            if (line.quantity() == null || line.quantity() <= 0)
+            if (guard && (line.quantity() == null || line.quantity() <= 0))
                 throw AppException.badRequest("주문 수량은 1 이상이어야 합니다.");
 
             var product = productMapper.findById(line.productId())
@@ -79,7 +83,7 @@ public class OrderService {
 
             if (!product.getTenantId().equals(tenantId))
                 throw AppException.badRequest("다른 쇼핑몰 상품은 주문할 수 없습니다.");
-            if (product.getPrice() < 0)
+            if (guard && product.getPrice() < 0)
                 throw AppException.badRequest("상품 가격이 올바르지 않습니다.");
 
             // 재고 차감 (XML에서 stock >= qty 조건으로 원자적 처리)
@@ -96,14 +100,18 @@ public class OrderService {
                     .build();
 
             items.add(item);
-            // 오버플로 방어 (음수 total 로 잔액 가드 우회 차단)
-            try {
-                total = Math.addExact(total, Math.multiplyExact(product.getPrice(), (long) line.quantity()));
-            } catch (ArithmeticException e) {
-                throw AppException.badRequest("주문 금액이 허용 범위를 초과했습니다.");
+            if (guard) {
+                // 오버플로 방어 (음수 total 로 잔액 가드 우회 차단)
+                try {
+                    total = Math.addExact(total, Math.multiplyExact(product.getPrice(), (long) line.quantity()));
+                } catch (ArithmeticException e) {
+                    throw AppException.badRequest("주문 금액이 허용 범위를 초과했습니다.");
+                }
+            } else {
+                total += product.getPrice() * line.quantity();   // 취약: 음수수량 → 음수 total
             }
         }
-        if (total < 0)
+        if (guard && total < 0)
             throw AppException.badRequest("주문 금액이 올바르지 않습니다.");
 
         // 잔액 확인 + 차감 (원자적: 잔액 >= 주문금액일 때만 성공)

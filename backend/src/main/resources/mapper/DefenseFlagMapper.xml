@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.air.DefenseFlagMapper">
+
+    <resultMap id="FlagRM" type="com.shop.air.DefenseFlag">
+        <id     property="flagKey"   column="flag_key"/>
+        <result property="enabled"   column="enabled"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="FlagRM">
+        SELECT * FROM defense_flags ORDER BY flag_key
+    </select>
+
+    <update id="upsert">
+        INSERT INTO defense_flags (flag_key, enabled, updated_at)
+        VALUES (#{flagKey}, #{enabled}, datetime('now'))
+        ON CONFLICT(flag_key) DO UPDATE SET
+            enabled = excluded.enabled,
+            updated_at = datetime('now')
+    </update>
+
+</mapper>
