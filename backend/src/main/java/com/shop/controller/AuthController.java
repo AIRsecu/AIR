@@ -21,7 +21,17 @@ public class AuthController {
             @Valid @RequestBody LoginRequest req,
             HttpServletRequest http) {
         String ua = http.getHeader("User-Agent");
-        return ResponseEntity.ok(ApiResponse.ok(authService.login(req, ua)));
+        return ResponseEntity.ok(ApiResponse.ok(authService.login(req, ua, clientIp(http))));
+    }
+
+    /** 클라이언트 IP — nginx 가 X-Forwarded-For 끝에 덧붙인 실제 IP 사용(스푸핑 방지), 없으면 remoteAddr */
+    private static String clientIp(HttpServletRequest http) {
+        String xff = http.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            String[] parts = xff.split(",");
+            return parts[parts.length - 1].trim();
+        }
+        return http.getRemoteAddr();
     }
 
     @PostMapping("/refresh")

@@ -36,8 +36,13 @@ public class ProductController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Product>> get(
             @PathVariable String tenantId,
-            @PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.ok(productService.getByIdForTenant(id, tenantId)));
+            @PathVariable String id,
+            @AuthenticationPrincipal User actor) {
+        Product p = productService.getByIdForTenant(id, tenantId);
+        // 비활성 상품은 해당 테넌트 관리자에게만 (공개 목록 정책과 일치)
+        if (!p.isActive() && (actor == null || !actor.canManage(tenantId)))
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok(ApiResponse.ok(p));
     }
 
     @PostMapping

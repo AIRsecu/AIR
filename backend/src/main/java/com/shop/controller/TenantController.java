@@ -45,8 +45,14 @@ public class TenantController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Tenant>> get(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.ok(tenantService.getById(id)));
+    public ResponseEntity<ApiResponse<Tenant>> get(
+            @PathVariable String id,
+            @AuthenticationPrincipal User actor) {
+        Tenant t = tenantService.getById(id);
+        // 비활성 테넌트는 관리 권한자에게만 노출
+        if (!t.isActive() && (actor == null || !actor.canManage(id)))
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok(ApiResponse.ok(t));
     }
 
     /** super_admin/admin – 테넌트 생성 (admin 은 생성 시 자동으로 관리자 배정) */

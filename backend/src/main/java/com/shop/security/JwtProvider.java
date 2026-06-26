@@ -41,14 +41,18 @@ public class JwtProvider {
         this.refreshTtlMs     = refreshHours     * 3600 * 1000L;
     }
 
-    /** 기본/약한 시크릿 거부 (fail-closed): "change-me" 포함 또는 32바이트 미만이면 기동 실패 */
+    /** 기본/약한 시크릿 거부 (fail-closed): 기본값/짧음/저엔트로피면 기동 실패 */
     private static void requireStrongSecret(String name, String secret) {
-        if (secret == null
+        boolean weak =
+                secret == null
+                || secret.isBlank()
                 || secret.toLowerCase().contains("change-me")
-                || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+                || secret.strip().getBytes(StandardCharsets.UTF_8).length < 32
+                || secret.chars().distinct().count() < 8;   // 'aaaa…'/'0000…'/공백 등 저엔트로피 차단
+        if (weak) {
             throw new IllegalStateException(
-                name + " 가 안전하지 않습니다(기본값/약한 값). 32바이트 이상의 랜덤 시크릿을 "
-                + "환경변수로 설정하세요. 운영은 64바이트 이상 권장.");
+                name + " 가 안전하지 않습니다(기본값/약/저엔트로피). 32바이트 이상의 충분히 무작위한 "
+                + "시크릿을 환경변수로 설정하세요. 운영은 64바이트 이상 권장.");
         }
     }
 

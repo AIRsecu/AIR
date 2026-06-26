@@ -28,26 +28,35 @@ public class AuthService {
     private final JwtProvider        jwt;
     private final PasswordEncoder    encoder;
 
-    // ── 로그인 brute-force 방어 (인메모리: username 기준 실패 카운트/잠금) ──
-    private static final int  MAX_FAIL  = 5;
-    private static final long LOCK_SEC  = 300;   // 5분 잠금
-    private final Map<String, long[]> loginState = new ConcurrentHashMap<>(); // key -> [failCount, lockUntilEpoch]
+    // ── 로그인 brute-force 방어 (IP 기준 실패 카운트/잠금, 메모리 상한) ──
+    //  username 이 아닌 클라이언트 IP 로 제한 → 표적 계정 잠금 DoS 방지
+    private static final int  MAX_FAIL = 5;
+    private static final long LOCK_SEC = 300;     // 5분
+    private static final int  MAX_KEYS = 4096;    // 메모리 상한(초과 시 만료 엔트리 정리)
+    // bcrypt 타이밍 평준화용 더미 해시(존재하지 않는 사용자에도 동일 비용 → timing enumeration 차단)
+    private static final String DUMMY_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+    private final Map<String, long[]> loginState = new ConcurrentHashMap<>(); // ip -> [failCount, lockUntilEpoch]
 
     @Transactional
-    public LoginResponse login(LoginRequest req, String userAgent) {
-        final String key = req.username() == null ? "" : req.username().toLowerCase();
+    public LoginResponse login(LoginRequest req, String userAgent, String clientIp) {
+        final String key = (clientIp == null || clientIp.isBlank()) ? "unknown" : clientIp;
+        final long now = Instant.now().getEpochSecond();
 
         long[] st = loginState.get(key);
-        if (st != null && st[1] > Instant.now().getEpochSecond())
+        if (st != null && st[1] > now)
             throw AppException.unauthorized("로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.");
 
         User user = userMapper.findByUsername(req.username()).orElse(null);
-        // 존재/비활성/비번오류를 동일 401·동일 메시지로 통일 (계정 enumeration 완화)
-        if (user == null || !user.isActive() || !encoder.matches(req.password(), user.getPasswordHash())) {
-            registerFailure(key);
+        // 존재/비활성/비번오류를 동일 401 + 동일 비용(더미 bcrypt)으로 처리 (enumeration/timing 완화)
+        boolean ok;
+        if (user == null) { encoder.matches(req.password(), DUMMY_HASH); ok = false; }
+        else ok = user.isActive() && encoder.matches(req.password(), user.getPasswordHash());
+
+        if (!ok) {
+            registerFailure(key, now);
             throw AppException.unauthorized("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
-        loginState.remove(key);   // 성공 시 카운터 초기화
+        loginState.remove(key);   // 성공 시 해당 IP 카운터 초기화
 
         userMapper.updateLastLoginAt(user.getId());
 
@@ -114,13 +123,15 @@ public class AuthService {
                 .ifPresent(t -> tokenMapper.revoke(t.getId(), null));
     }
 
-    /** 로그인 실패 누적 → 임계치 도달 시 일정 시간 잠금 */
-    private void registerFailure(String key) {
-        long[] s = loginState.computeIfAbsent(key, k -> new long[]{0, 0});
-        s[0] += 1;
-        if (s[0] >= MAX_FAIL) {
-            s[1] = Instant.now().getEpochSecond() + LOCK_SEC;
-            s[0] = 0;
-        }
+    /** IP 단위 실패 누적(원자적 compute) + 메모리 상한 정리 */
+    private void registerFailure(String key, long now) {
+        if (loginState.size() > MAX_KEYS)
+            loginState.entrySet().removeIf(e -> e.getValue()[1] < now); // 만료/비잠금 엔트리 정리
+        loginState.compute(key, (k, s) -> {
+            if (s == null) s = new long[]{0, 0};
+            s[0] += 1;
+            if (s[0] >= MAX_FAIL) { s[1] = now + LOCK_SEC; s[0] = 0; }
+            return s;
+        });
     }
 }

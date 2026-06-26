@@ -129,6 +129,9 @@ public class UserService {
         if (isSelf && !encoder.matches(oldRaw, existing.getPasswordHash()))
             throw AppException.badRequest("현재 비밀번호가 일치하지 않습니다.");
 
+        if (newRaw == null || newRaw.length() < 8)
+            throw AppException.badRequest("비밀번호는 8자 이상이어야 합니다.");
+
         userMapper.updatePasswordHash(existing.getId(), encoder.encode(newRaw));
     }
 }
