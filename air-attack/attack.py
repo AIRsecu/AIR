@@ -17,7 +17,7 @@ AIR PoC 공격 모듈 (의존성 없음 / stdlib only)
 패치 후 재실행 시 DEFENDED 가 나오면 자동 방어 성공.
 종료코드: 공격 성공(취약)=1, 방어됨=0  (CI/검증에서 활용)
 """
-import argparse, json, sys, time, urllib.request, urllib.error
+import argparse, json, random, sys, time, urllib.request, urllib.error
 
 def call(base, method, path, token=None, body=None):
     url = base.rstrip('/') + path
@@ -43,7 +43,7 @@ def login(base, username, password):
 
 def prepare(base, admin_tok):
     """super_admin 으로 테넌트/상품/고객 준비. 반환: (tenantId, productId, custUser, custPass)"""
-    suffix = str(int(time.time()))
+    suffix = f"{int(time.time())}{random.randint(100, 999)}"   # 연속 실행 slug 충돌 방지
     # 테넌트
     st, j = call(base, 'POST', '/api/v1/tenants', admin_tok,
                  {'name': f'atk-{suffix}', 'slug': f'atk-{suffix}'})
