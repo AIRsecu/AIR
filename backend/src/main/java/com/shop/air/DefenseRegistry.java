@@ -3,6 +3,7 @@ package com.shop.air;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
+@DependsOnDatabaseInitialization   // schema.sql(테이블 생성) 이후에 @PostConstruct 로드 보장
 @RequiredArgsConstructor
 public class DefenseRegistry {
 
