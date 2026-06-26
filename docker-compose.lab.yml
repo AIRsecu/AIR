@@ -1,0 +1,59 @@
+# ============================================================
+#  AIR vuln-lab 격리 스택 (공개 데모와 분리)
+#   - 포트 8081, 컨테이너 airlab-*, 볼륨 airlab-data, 네트워크 airlab-net
+#   - 공개 데모(~/shoptest, 80포트/shop-*)와 동시 구동 가능
+#   실행: docker compose -p airlab -f docker-compose.lab.yml up -d --build
+#   접속: http://<host>:8081   (또는 EC2 내부 http://localhost:8081)
+#   ※ vuln-lab: 의도적 취약점 포함 — 신뢰 IP에서만 8081 개방
+# ============================================================
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airlab-backend
+    restart: unless-stopped
+    environment:
+      - SPRING_APPLICATION_NAME=air-lab
+      # 강한 시크릿 필수(fail-closed) — .env 에 설정
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-60}
+      - JWT_SUPER_ACCESS_TTL_HOURS=${JWT_SUPER_ACCESS_TTL_HOURS:-120}
+      - JWT_REFRESH_TTL_HOURS=${JWT_REFRESH_TTL_HOURS:-168}
+      - APP_BOOTSTRAP_ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - APP_BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - APP_CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081}
+      - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/shop.db
+    volumes:
+      - airlab-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - airlab-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: airlab-frontend
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - airlab-net
+
+volumes:
+  airlab-data:
+    driver: local
+
+networks:
+  airlab-net:
+    driver: bridge
