@@ -25,7 +25,8 @@ public class IncidentService {
     private static final Map<String, String> TYPE_TO_DEFENSE = Map.of(
             "ORDER_NEGATIVE_QTY", DefenseRegistry.ORDER_QTY_GUARD,
             "SQLI_ATTEMPT",       DefenseRegistry.SQL_INJECTION_GUARD,
-            "XSS_ATTEMPT",        DefenseRegistry.XSS_INPUT_GUARD
+            "XSS_ATTEMPT",        DefenseRegistry.XSS_INPUT_GUARD,
+            "IDOR_ATTEMPT",       DefenseRegistry.AUTHZ_IDOR_GUARD
     );
 
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {

@@ -6,6 +6,7 @@ import com.shop.domain.User;
 import com.shop.dto.order.*;
 import com.shop.exception.AppException;
 import com.shop.air.DefenseRegistry;
+import com.shop.air.IncidentService;
 import com.shop.mapper.OrderMapper;
 import com.shop.mapper.ProductMapper;
 import com.shop.mapper.TenantMapper;
@@ -26,7 +27,8 @@ public class OrderService {
     private final ProductMapper productMapper;
     private final UserMapper    userMapper;
     private final TenantMapper  tenantMapper;
-    private final DefenseRegistry defense;   // [AIR] 방어 토글
+    private final DefenseRegistry defense;          // [AIR] 방어 토글
+    private final IncidentService incidentService;  // [AIR] 인시던트 보고(IDOR)
 
     public List<Order> listByTenant(String tenantId) {
         return orderMapper.findByTenantId(tenantId);
@@ -36,11 +38,25 @@ public class OrderService {
         return orderMapper.findByCustomerId(customerId);
     }
 
-    /** 소유 고객 또는 해당 테넌트 관리자만 단건 조회 가능 (IDOR 방지) */
+    /**
+     * 소유 고객 또는 해당 테넌트 관리자만 단건 조회 가능.
+     * [AIR] authz.idor-guard OFF 면 소유자 검증을 생략(취약: 타인 주문 열람=IDOR),
+     *       ON 이면 차단. 소유자/관리자가 아닌 접근은 air.detection 시 IDOR_ATTEMPT 로
+     *       보고 → authz.idor-guard 즉시 ON → 같은 요청부터 차단.
+     */
     public Order getByIdAuthorized(String id, User actor) {
         Order order = getById(id);
-        if (!actor.getId().equals(order.getCustomerId()) && !actor.canManage(order.getTenantId()))
-            throw AppException.forbidden("해당 주문에 대한 권한이 없습니다.");
+        boolean allowed = actor.getId().equals(order.getCustomerId())
+                || actor.canManage(order.getTenantId());
+        if (!allowed) {
+            if (defense.isEnabled(DefenseRegistry.DETECTION))
+                incidentService.report("IDOR_ATTEMPT",
+                        "/api/v1/tenants/" + order.getTenantId() + "/orders/" + id,
+                        null, actor.getUsername(), "orderId=" + id);
+            if (defense.isEnabled(DefenseRegistry.AUTHZ_IDOR_GUARD))
+                throw AppException.forbidden("해당 주문에 대한 권한이 없습니다.");
+            // guard OFF → 취약: 타인 주문을 그대로 반환
+        }
         return order;
     }
 

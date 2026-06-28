@@ -95,6 +95,29 @@ python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> xss
 # → 🟢 DEFENDED — 탐지 즉시 xss.input-guard 활성화 → 이스케이프 저장
 ```
 
+## 시나리오 4 — IDOR (타 고객 주문 무단 열람)
+
+취약 표면: `GET /api/v1/tenants/{tid}/orders/{id}` (소유자/관리자만 허용해야 함)
+- `authz.idor-guard` **OFF** → 소유자 검증 생략 → 다른 고객 주문 열람(IDOR)
+- `authz.idor-guard` **ON**  → 소유자/관리자가 아니면 403
+- 탐지: `OrderService.getByIdAuthorized` 에서 소유자/관리자가 아닌 접근 감지(서비스 계층)
+  → `IDOR_ATTEMPT` 보고 → `authz.idor-guard` 즉시 ON → 같은 요청부터 차단.
+  (입력 시그니처가 아니라 "행위(소유권 위반)" 기반 탐지)
+
+```bash
+# 취약 시연 (탐지 OFF)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/disable    -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/authz.idor-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> idor
+# → 🔴 VULNERABLE — 타 고객 주문 노출
+
+# 자율 방어 시연 (탐지 ON + 방어 리셋)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/enable     -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/authz.idor-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> idor
+# → 🟢 DEFENDED — 소유자 검증으로 403
+```
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 

