@@ -119,17 +119,21 @@ public class DetectionFilter extends OncePerRequestFilter {
         String uri = req.getRequestURI();
         String method = req.getMethod();
         String ip = clientIp(req);
-        boolean apiReq = uri.startsWith("/api/v1/") && !uri.startsWith("/api/v1/air/");
+        // 제어플레인(/api/v1/air/)은 모든 차단에서 제외 — 방어 토글/룰 관리 락아웃 방지.
+        boolean controlPlane = uri.startsWith("/api/v1/air/");
+        boolean apiReq = uri.startsWith("/api/v1/") && !controlPlane;
 
-        // ── [Stage2] 런타임 동적 룰: 매칭 시 즉시 차단 (코드 재배포 없음) ──
-        DynamicRule rule = ruleRegistry.match(method, uri, req.getQueryString());
-        if (rule != null) {
-            block(res, 429, "RULE_BLOCKED", "동적 차단 룰에 의해 거부되었습니다.");
-            return;
+        // ── [Stage2] 런타임 동적 룰: 매칭 시 즉시 차단 (제어플레인 제외) ──
+        if (!controlPlane) {
+            DynamicRule rule = ruleRegistry.match(method, uri, req.getQueryString());
+            if (rule != null) {
+                block(res, 429, "RULE_BLOCKED", "동적 차단 룰에 의해 거부되었습니다.");
+                return;
+            }
         }
 
-        // ── [Stage1] 일반 shield: 의심 출처(격리됨)면 차단 ──
-        if (registry.isEnabled(DefenseRegistry.AIR_SHIELD) && isQuarantined(ip)) {
+        // ── [Stage1] 일반 shield: 의심 출처(격리됨)면 차단 (제어플레인 제외) ──
+        if (!controlPlane && registry.isEnabled(DefenseRegistry.AIR_SHIELD) && isQuarantined(ip)) {
             block(res, 429, "SHIELD_BLOCKED", "비정상 활동 감지로 일시 차단되었습니다.");
             return;
         }

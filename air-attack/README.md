@@ -190,8 +190,17 @@ python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> unknown
 ## 시나리오 8 — 런타임 동적 차단 룰 (코드 재배포 없음)  [#1 적응형 Stage2]
 
 LLM 어드바이저(향후) 또는 운영자가 룰을 설치하면 즉시 적용된다. (현재는 수동/curl 데모)
+> 제어플레인 /api/v1/air/** 는 shield·동적룰 차단에서 항상 제외(운영자 락아웃 방지).
+> ※ 직전 unknown 방어로 air.shield 가 켜져 있으면 /health 가 shield 로 429 → 먼저 해제:
+>   `curl -s -X POST $BASE/api/v1/air/defenses/air.shield/disable -H "$AUTH"`
+>   (격리 30s 도 만료 대기). 그 뒤 아래 룰 데모 실행.
 
 ```bash
+# 0) shield 해제(직전 unknown 방어 잔여 제거) + 격리 만료까지 대기
+curl -s -X POST $BASE/api/v1/air/defenses/air.shield/disable -H "$AUTH" >/dev/null
+sleep 31
+curl -s -o /dev/null -w "기준선 /health → %{http_code}\n" $BASE/api/v1/health   # → 200 이어야 함
+
 # 1) 룰 설치: /api/v1/health 로의 GET 을 차단
 RID=$(curl -s -X POST $BASE/api/v1/air/rules -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"method":"GET","pathContains":"/api/v1/health","action":"BLOCK","source":"manual"}' \
