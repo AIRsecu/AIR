@@ -165,6 +165,47 @@ python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ransom
 # → 🟢 DEFENDED — 5건 삭제 후 초과분 429 차단
 ```
 
+## 시나리오 7 — 미지(제로데이) 공격: 이상탐지 → 일반 shield  [#1 적응형 Stage1]
+
+시그니처가 없는 공격을 '행위/효과'로 탐지한다. 여기선 스캐닝/퍼징(존재하지 않는 경로
+대량 요청 → 4xx 폭증)을 예로 든다.
+- `anomaly.detection` ON → IP별 4xx 20건/10s 초과 시 ANOMALY_SCAN 보고
+- 매핑 없는 미지 유형 → IncidentService 폴백으로 `air.shield` 자동 ON + 출처 격리(30s)
+- shield ON + 격리된 IP → 이후 요청 429(SHIELD_BLOCKED)
+
+```bash
+# 취약 시연 (이상탐지 OFF + shield OFF)
+curl -s -X POST $BASE/api/v1/air/defenses/anomaly.detection/disable -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/air.shield/disable         -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> unknown
+# → 🔴 VULNERABLE — 스캐닝 무탐지
+
+# 자율 방어 시연 (이상탐지 ON + shield 리셋) — 격리 만료 위해 ~30초 후
+curl -s -X POST $BASE/api/v1/air/defenses/anomaly.detection/enable  -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/air.shield/disable        -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> unknown
+# → 🟢 DEFENDED — 이상(스캔) 탐지 → air.shield 자동 ON → 출처 차단
+```
+
+## 시나리오 8 — 런타임 동적 차단 룰 (코드 재배포 없음)  [#1 적응형 Stage2]
+
+LLM 어드바이저(향후) 또는 운영자가 룰을 설치하면 즉시 적용된다. (현재는 수동/curl 데모)
+
+```bash
+# 1) 룰 설치: /api/v1/health 로의 GET 을 차단
+RID=$(curl -s -X POST $BASE/api/v1/air/rules -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"method":"GET","pathContains":"/api/v1/health","action":"BLOCK","source":"manual"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+# 2) 즉시 차단 확인 (재배포 X)
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/api/v1/health      # → 429
+# 3) 룰 목록 / 제거
+curl -s $BASE/api/v1/air/rules -H "$AUTH"; echo
+curl -s -X DELETE $BASE/api/v1/air/rules/$RID -H "$AUTH"
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/api/v1/health      # → 200 (복구)
+```
+> ★ Stage3~4(예정): UNKNOWN_ANOMALY 발생 시 LLM이 위 룰(JSON)을 자동 생성·설치하고
+> 광역 shield 를 완화 → '미지 공격에 맞춘' 정밀 차단을 런타임에 자동 반영(ANTHROPIC_API_KEY 필요).
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 

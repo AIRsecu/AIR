@@ -19,6 +19,7 @@ public class AirController {
 
     private final DefenseRegistry registry;
     private final IncidentService incidentService;
+    private final DynamicRuleRegistry ruleRegistry;
 
     @GetMapping("/defenses")
     public ResponseEntity<ApiResponse<Map<String, Boolean>>> defenses(@AuthenticationPrincipal User actor) {
@@ -54,6 +55,33 @@ public class AirController {
             @RequestParam(required = false) String action, @AuthenticationPrincipal User actor) {
         requireSuper(actor);
         incidentService.updateStatus(id, status, action);
+        return ResponseEntity.ok(ApiResponse.ok());
+    }
+
+    // ── [Stage2] 런타임 동적 차단 룰 (LLM 어드바이저/운영자가 설치) ──
+
+    @GetMapping("/rules")
+    public ResponseEntity<ApiResponse<List<DynamicRule>>> rules(@AuthenticationPrincipal User actor) {
+        requireSuper(actor);
+        return ResponseEntity.ok(ApiResponse.ok(ruleRegistry.all()));
+    }
+
+    /** body: { method, pathContains, contains, action(BLOCK), source } — 즉시 적용(재배포 X) */
+    @PostMapping("/rules")
+    public ResponseEntity<ApiResponse<DynamicRule>> addRule(
+            @RequestBody Map<String, String> body, @AuthenticationPrincipal User actor) {
+        requireSuper(actor);
+        DynamicRule r = ruleRegistry.add(
+                body.get("method"), body.get("pathContains"),
+                body.get("contains"), body.get("action"), body.getOrDefault("source", "manual"));
+        return ResponseEntity.ok(ApiResponse.ok(r));
+    }
+
+    @DeleteMapping("/rules/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteRule(
+            @PathVariable String id, @AuthenticationPrincipal User actor) {
+        requireSuper(actor);
+        ruleRegistry.remove(id);
         return ResponseEntity.ok(ApiResponse.ok());
     }
 

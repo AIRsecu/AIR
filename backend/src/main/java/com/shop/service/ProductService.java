@@ -20,10 +20,19 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final DefenseRegistry defense;   // [AIR] 방어 토글
 
+    /** [AIR 불변식] invariant.row-cap ON 이면 응답 행수 상한(데이터 대량유출을 벡터무관 차단). */
+    private static final int ROW_CAP = 200;
+    private List<Product> cap(List<Product> list) {
+        if (list != null && list.size() > ROW_CAP
+                && defense.isEnabled(DefenseRegistry.INVARIANT_ROW_CAP))
+            return list.subList(0, ROW_CAP);
+        return list;
+    }
+
     public List<Product> listByTenant(String tenantId, boolean activeOnly) {
-        return activeOnly
+        return cap(activeOnly
                 ? productMapper.findActiveByTenantId(tenantId)
-                : productMapper.findByTenantId(tenantId);
+                : productMapper.findByTenantId(tenantId));
     }
 
     /**
@@ -31,9 +40,9 @@ public class ProductService {
      * OFF 면 취약한 동적 SQL(${}) 을 사용 → SQL Injection 시연/방어 토글.
      */
     public List<Product> search(String tenantId, String q) {
-        return defense.isEnabled(DefenseRegistry.SQL_INJECTION_GUARD)
+        return cap(defense.isEnabled(DefenseRegistry.SQL_INJECTION_GUARD)
                 ? productMapper.searchByNameSafe(tenantId, q)
-                : productMapper.searchByNameVulnerable(tenantId, q);
+                : productMapper.searchByNameVulnerable(tenantId, q));
     }
 
     public Product getById(String id) {

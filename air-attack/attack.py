@@ -243,12 +243,33 @@ def attack_ransom(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🔴 VULNERABLE — {deleted}건 전부 삭제됨(무제한 대량 파괴).")
         return 1
 
+def attack_unknown(base, admin_user, admin_pass):
+    print("=== AIR PoC: 미지 공격 (시그니처 미매칭 스캐닝/퍼징) ===")
+    n = 25
+    print(f"[>] 존재하지 않는 경로 {n}개 연속 요청 (어떤 시그니처에도 안 걸림)")
+    codes = {}
+    for i in range(n):
+        path = f"/api/v1/zz-{int(time.time())}-{i}-{random.randint(1000, 9999)}"
+        st, _ = call(base, 'GET', path)
+        codes[st] = codes.get(st, 0) + 1
+    print(f"[*] 스캔 응답 분포: {codes}")
+
+    # 직후 '정상' 요청이 막히면 = 적응형(이상탐지→shield) 작동
+    st, _ = call(base, 'GET', '/api/v1/health')
+    print(f"[<] 직후 정상요청 GET /health → HTTP {st}")
+    if st in (429, 403):
+        print(f"\n[RESULT] 🟢 DEFENDED — 이상탐지(4xx 스캔)로 출처 격리·차단(shield).")
+        return 0
+    else:
+        print(f"\n[RESULT] 🔴 VULNERABLE — 스캐닝 무탐지·정상통과(이상탐지 OFF).")
+        return 1
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos', 'ransom'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos', 'ransom', 'unknown'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
@@ -262,6 +283,8 @@ def main():
         sys.exit(attack_ddos(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'ransom':
         sys.exit(attack_ransom(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'unknown':
+        sys.exit(attack_unknown(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()

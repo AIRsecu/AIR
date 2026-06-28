@@ -30,15 +30,22 @@ public class DefenseRegistry {
     public static final String AUTHZ_IDOR_GUARD    = "authz.idor-guard";    // 기본 OFF=취약(소유자 검증 생략)
     public static final String DDOS_RATE_GUARD     = "ddos.rate-guard";     // 기본 OFF=취약(레이트리밋 없음)
     public static final String RANSOM_MASSDELETE_GUARD = "ransom.massdelete-guard"; // 기본 OFF=취약(대량삭제 무제한)
-    public static final String DETECTION           = "air.detection";       // 기본 ON=탐지활성
-    private static final Map<String, Boolean> KNOWN_DEFAULTS = Map.of(
-            ORDER_QTY_GUARD,         false,
-            SQL_INJECTION_GUARD,     false,
-            XSS_INPUT_GUARD,         false,
-            AUTHZ_IDOR_GUARD,        false,
-            DDOS_RATE_GUARD,         false,
-            RANSOM_MASSDELETE_GUARD, false,
-            DETECTION,               true
+    // ── #1 적응형(미지공격) ──
+    public static final String ANOMALY_DETECTION   = "anomaly.detection";   // 기본 ON=이상탐지 활성
+    public static final String AIR_SHIELD          = "air.shield";          // 기본 OFF=일반 shield(의심출처 격리)
+    public static final String INVARIANT_ROW_CAP   = "invariant.row-cap";   // 기본 OFF=응답행수 상한(벡터무관)
+    public static final String DETECTION           = "air.detection";       // 기본 ON=시그니처 탐지활성
+    private static final Map<String, Boolean> KNOWN_DEFAULTS = Map.ofEntries(
+            Map.entry(ORDER_QTY_GUARD,         false),
+            Map.entry(SQL_INJECTION_GUARD,     false),
+            Map.entry(XSS_INPUT_GUARD,         false),
+            Map.entry(AUTHZ_IDOR_GUARD,        false),
+            Map.entry(DDOS_RATE_GUARD,         false),
+            Map.entry(RANSOM_MASSDELETE_GUARD, false),
+            Map.entry(ANOMALY_DETECTION,       true),
+            Map.entry(AIR_SHIELD,              false),
+            Map.entry(INVARIANT_ROW_CAP,       false),
+            Map.entry(DETECTION,               true)
     );
 
     private final DefenseFlagMapper mapper;

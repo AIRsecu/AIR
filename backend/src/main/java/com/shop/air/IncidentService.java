@@ -21,7 +21,7 @@ public class IncidentService {
     private final DefenseRegistry registry;
     private final SecurityIncidentMapper incidentMapper;
 
-    /** 인시던트 유형 → 방어 키 매핑 */
+    /** 인시던트 유형 → 방어 키 매핑 (알려진 시그니처) */
     private static final Map<String, String> TYPE_TO_DEFENSE = Map.of(
             "ORDER_NEGATIVE_QTY", DefenseRegistry.ORDER_QTY_GUARD,
             "SQLI_ATTEMPT",       DefenseRegistry.SQL_INJECTION_GUARD,
@@ -32,14 +32,15 @@ public class IncidentService {
     );
 
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {
-        String defenseKey = TYPE_TO_DEFENSE.get(type);
+        // [#1 적응형] 알려진 유형이면 전용 가드, 미지/이상(UNKNOWN_ANOMALY 등)이면 일반 shield 로 폴백.
+        String defenseKey = TYPE_TO_DEFENSE.getOrDefault(type, DefenseRegistry.AIR_SHIELD);
         String action;
-        if (defenseKey != null && !registry.isEnabled(defenseKey)) {
-            registry.enable(defenseKey);                 // ★ 즉시 차단
+        if (!registry.isEnabled(defenseKey)) {
+            registry.enable(defenseKey);                 // ★ 즉시 차단(전용 가드 또는 일반 shield)
             action = "DEFENSE_ENABLED:" + defenseKey;
-            log.warn("[AIR] 공격 탐지 '{}' → 방어 '{}' 즉시 활성화", type, defenseKey);
+            log.warn("[AIR] 탐지 '{}' → 방어 '{}' 즉시 활성화", type, defenseKey);
         } else {
-            action = defenseKey != null ? "ALREADY_DEFENDED:" + defenseKey : "NO_DEFENSE_MAPPED";
+            action = "ALREADY_DEFENDED:" + defenseKey;
         }
 
         SecurityIncident inc = SecurityIncident.builder()

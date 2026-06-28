@@ -34,6 +34,7 @@ public class DetectionFilter extends OncePerRequestFilter {
 
     private final IncidentService incidentService;
     private final DefenseRegistry registry;
+    private final DynamicRuleRegistry ruleRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // POST /api/v1/tenants/{tid}/orders  (하위경로 제외)
@@ -77,93 +78,127 @@ public class DetectionFilter extends OncePerRequestFilter {
         }
     }
 
+    // ── #1 적응형: 이상탐지(응답 상태 기반) + 일반 shield 격리 ──
+    private static final int  BURST_5XX     = 5;        // 창 내 5xx 임계(미처리 예외 연쇄=신종 익스플로잇 신호)
+    private static final int  BURST_4XX     = 20;       // 창 내 4xx 임계(스캐닝/퍼징)
+    private static final long QUARANTINE_MS = 30_000L;  // 의심 출처 격리(쿨다운)
+    private final Map<String, Deque<Long>> err5xx = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Long>> err4xx = new ConcurrentHashMap<>();
+    private final Map<String, Long> quarantine = new ConcurrentHashMap<>();  // ip → 만료 epoch
+
+    private boolean isQuarantined(String ip) {
+        Long until = quarantine.get(ip);
+        return until != null && System.currentTimeMillis() < until;
+    }
+
+    /** 이상 신호 발생 → 출처 격리 + 인시던트 보고(폴백으로 air.shield 자동 ON). */
+    private void raiseAnomaly(String type, String uri, String ip, int count) {
+        quarantine.put(ip, System.currentTimeMillis() + QUARANTINE_MS);
+        incidentService.report(type, uri, ip, null, "count=" + count + " in " + (WINDOW_MS / 1000) + "s");
+    }
+
+    /** 응답 상태를 관측해 이상(5xx 버스트 / 4xx 스캔)을 탐지. */
+    private void observeStatus(String ip, String uri, int status) {
+        if (status >= 500) {
+            if (hit(err5xx, ip) > BURST_5XX) raiseAnomaly("ANOMALY_5XX_BURST", uri, ip, BURST_5XX);
+        } else if (status == 400 || status == 401 || status == 403 || status == 404) {
+            if (hit(err4xx, ip) > BURST_4XX) raiseAnomaly("ANOMALY_SCAN", uri, ip, BURST_4XX);
+        }
+    }
+
+    private void block(HttpServletResponse res, int code, String errCode, String msg) throws IOException {
+        res.setStatus(code);
+        res.setContentType("application/json;charset=UTF-8");
+        res.getWriter().write("{\"success\":false,\"code\":\"" + errCode + "\",\"message\":\"" + msg + "\"}");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
         String uri = req.getRequestURI();
-
+        String method = req.getMethod();
+        String ip = clientIp(req);
         boolean apiReq = uri.startsWith("/api/v1/") && !uri.startsWith("/api/v1/air/");
 
-        // ── DDoS: 제어플레인(/air/) 제외한 API 요청을 IP별로 카운트 (탐지 플래그와 무관하게 가드 적용) ──
+        // ── [Stage2] 런타임 동적 룰: 매칭 시 즉시 차단 (코드 재배포 없음) ──
+        DynamicRule rule = ruleRegistry.match(method, uri, req.getQueryString());
+        if (rule != null) {
+            block(res, 429, "RULE_BLOCKED", "동적 차단 룰에 의해 거부되었습니다.");
+            return;
+        }
+
+        // ── [Stage1] 일반 shield: 의심 출처(격리됨)면 차단 ──
+        if (registry.isEnabled(DefenseRegistry.AIR_SHIELD) && isQuarantined(ip)) {
+            block(res, 429, "SHIELD_BLOCKED", "비정상 활동 감지로 일시 차단되었습니다.");
+            return;
+        }
+
+        // ── DDoS: 제어플레인(/air/) 제외한 API 요청을 IP별로 카운트 ──
         if (apiReq) {
-            int count = hit(hits, clientIp(req));
+            int count = hit(hits, ip);
             if (count > RATE_LIMIT) {
                 if (registry.isEnabled(DefenseRegistry.DETECTION)
                         && !registry.isEnabled(DefenseRegistry.DDOS_RATE_GUARD))
-                    incidentService.report("DDOS_FLOOD", uri, clientIp(req), null,
+                    incidentService.report("DDOS_FLOOD", uri, ip, null,
                             "rate=" + count + " in " + (WINDOW_MS / 1000) + "s");
                 if (registry.isEnabled(DefenseRegistry.DDOS_RATE_GUARD)) {
-                    res.setStatus(429);
-                    res.setContentType("application/json;charset=UTF-8");
-                    res.getWriter().write(
-                        "{\"success\":false,\"code\":\"RATE_LIMITED\",\"message\":\"요청이 너무 많습니다.\"}");
+                    block(res, 429, "RATE_LIMITED", "요청이 너무 많습니다.");
                     return;
                 }
             }
         }
 
         // ── 랜섬(유사): DELETE 빈도 폭주(대량 파괴) 탐지 → 차단 ──
-        if (apiReq && "DELETE".equalsIgnoreCase(req.getMethod())) {
-            int dcount = hit(deletes, clientIp(req));
+        if (apiReq && "DELETE".equalsIgnoreCase(method)) {
+            int dcount = hit(deletes, ip);
             if (dcount > MASSDELETE_LIMIT) {
                 if (registry.isEnabled(DefenseRegistry.DETECTION)
                         && !registry.isEnabled(DefenseRegistry.RANSOM_MASSDELETE_GUARD))
-                    incidentService.report("RANSOM_MASSDELETE", uri, clientIp(req), null,
+                    incidentService.report("RANSOM_MASSDELETE", uri, ip, null,
                             "deletes=" + dcount + " in " + (WINDOW_MS / 1000) + "s");
                 if (registry.isEnabled(DefenseRegistry.RANSOM_MASSDELETE_GUARD)) {
-                    res.setStatus(429);
-                    res.setContentType("application/json;charset=UTF-8");
-                    res.getWriter().write(
-                        "{\"success\":false,\"code\":\"MASS_DELETE_BLOCKED\",\"message\":\"비정상 대량 삭제가 차단되었습니다.\"}");
+                    block(res, 429, "MASS_DELETE_BLOCKED", "비정상 대량 삭제가 차단되었습니다.");
                     return;
                 }
             }
         }
 
-        if (!registry.isEnabled(DefenseRegistry.DETECTION)) { chain.doFilter(req, res); return; }
-
-        // ── SQL Injection: 상품 검색 q 파라미터 시그니처 검사 (GET, 본문 없음) ──
-        if ("GET".equalsIgnoreCase(req.getMethod()) && PRODUCT_SEARCH.matcher(uri).matches()) {
+        // ── 시그니처 탐지 (air.detection) — 본문 검사 시 캐시 래퍼로 교체 후 단일 chain 호출 ──
+        HttpServletRequest fwd = req;
+        if (registry.isEnabled(DefenseRegistry.DETECTION)) {
             try {
-                String q = req.getParameter("q");
-                if (q != null && SQLI_SIGNATURE.matcher(q).find())
-                    incidentService.report("SQLI_ATTEMPT", uri, clientIp(req), null, "q=" + q);
+                if ("GET".equalsIgnoreCase(method) && PRODUCT_SEARCH.matcher(uri).matches()) {
+                    String q = req.getParameter("q");
+                    if (q != null && SQLI_SIGNATURE.matcher(q).find())
+                        incidentService.report("SQLI_ATTEMPT", uri, ip, null, "q=" + q);
+                } else if ("POST".equalsIgnoreCase(method) && ORDER_CREATE.matcher(uri).matches()) {
+                    CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
+                    fwd = cached;
+                    detectNegativeQty(cached);
+                } else if (("POST".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method))
+                        && PRODUCT_WRITE.matcher(uri).matches()) {
+                    CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
+                    fwd = cached;
+                    String body = cached.getBodyAsString();
+                    if (body != null && XSS_SIGNATURE.matcher(body).find())
+                        incidentService.report("XSS_ATTEMPT", uri, ip, null, body);
+                }
             } catch (Exception e) {
-                log.debug("[AIR] SQLi 탐지 스킵: {}", e.getMessage());
+                log.debug("[AIR] 시그니처 탐지 스킵: {}", e.getMessage());
             }
-            chain.doFilter(req, res);
-            return;
         }
 
-        // ── 음수수량 자금증식: 주문 생성 본문 검사 (POST) ──
-        if ("POST".equalsIgnoreCase(req.getMethod()) && ORDER_CREATE.matcher(uri).matches()) {
-            CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
-            try {
-                detectNegativeQty(cached);
-            } catch (Exception e) {
-                log.debug("[AIR] 탐지 파싱 스킵: {}", e.getMessage());
-            }
-            chain.doFilter(cached, res);
-            return;
-        }
+        chain.doFilter(fwd, res);
 
-        // ── XSS: 상품 생성/수정 본문 검사 (POST/PATCH) ──
-        if (("POST".equalsIgnoreCase(req.getMethod()) || "PATCH".equalsIgnoreCase(req.getMethod()))
-                && PRODUCT_WRITE.matcher(uri).matches()) {
-            CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
+        // ── [Stage1] 이상탐지: 응답 상태 관측(시그니처 무관, 행위/효과 기반) ──
+        if (apiReq && registry.isEnabled(DefenseRegistry.ANOMALY_DETECTION)) {
             try {
-                String body = cached.getBodyAsString();
-                if (body != null && XSS_SIGNATURE.matcher(body).find())
-                    incidentService.report("XSS_ATTEMPT", uri, clientIp(req), null, body);
+                observeStatus(ip, uri, res.getStatus());
             } catch (Exception e) {
-                log.debug("[AIR] XSS 탐지 스킵: {}", e.getMessage());
+                log.debug("[AIR] 이상탐지 스킵: {}", e.getMessage());
             }
-            chain.doFilter(cached, res);
-            return;
         }
-
-        chain.doFilter(req, res);
     }
 
     private void detectNegativeQty(CachedBodyHttpServletRequest req) throws IOException {
