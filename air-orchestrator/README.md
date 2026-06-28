@@ -90,7 +90,18 @@ python3 ~/air-lab/air-orchestrator/responder.py --base http://localhost:8081 \
 curl -s http://localhost:8081/api/v1/air/rules -H "$AUTH"; echo            # source=LLM 룰
 curl -s "http://localhost:8081/api/v1/air/incidents?limit=3" -H "$AUTH"    # action=LLM_RULE:<id>
 ```
-> lab 한계: 모든 트래픽이 nginx 단일 IP 로 오므로 LLM 이 IP 룰을 만들면 lab 전체에 적용될 수 있다.
+### 무LLM 폴백 (결제/quota 불가 시): `--heuristic`
+LLM 키가 없거나 quota 초과(예: Gemini 429 billing)면 LLM 호출은 None 으로 폴백한다.
+`--heuristic` 를 주면 그때 **결정적 규칙(이상 출처 IP 차단)**으로 폐루프를 끝까지 완료한다
+(키 있으면 LLM 우선, 실패 시에만 휴리스틱). 자율 폐루프 시연을 결제 없이 보장.
+```bash
+python3 responder.py --base http://localhost:8081 \
+        --admin-user qudfhr --admin-pass '3rdProject!' --once --heuristic
+#  → [✓] [HEURISTIC] 분류='ANOMALY_SCAN' → 동적룰 설치(rid) + shield 완화
+#  ※ lab 단일 IP(nginx) 차단 → 이후 lab 트래픽이 RULE_BLOCKED. 복구: DELETE /air/rules/{rid}
+```
+
+> lab 한계: 모든 트래픽이 nginx 단일 IP 로 오므로 LLM/휴리스틱이 IP 룰을 만들면 lab 전체에 적용될 수 있다.
 > (운영의 실제 다중 클라이언트 IP 에서는 출처 정밀 차단으로 동작.) 검증 성공 기준 = 인시던트가
 > 자율적으로 분류→룰 설치→PATCHED 로 전이되는 것.
 

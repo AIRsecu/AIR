@@ -48,36 +48,56 @@ def set_status(base, token, inc_id, status, action):
 # ── Stage3: 이상/미지 인시던트 LLM 분류 → 런타임 동적룰 자동 설치 ──
 ANOMALY_PREFIXES = ("UNKNOWN", "ANOMALY")
 
-def add_rule(base, token, rule):
+def add_rule(base, token, rule, source='LLM'):
     st, j = api(base, 'POST', '/api/v1/air/rules', token, {
         'ip':           rule.get('ip', '') or '',
         'method':       rule.get('method', '*') or '*',
         'pathContains': rule.get('pathContains', '') or '',
         'contains':     rule.get('contains', '') or '',
         'action':       rule.get('action', 'BLOCK') or 'BLOCK',
-        'source':       'LLM',
+        'source':       source,
     })
     return (j or {}).get('data', {}).get('id') if st == 200 else None
 
 def set_shield(base, token, on):
     api(base, 'POST', f"/api/v1/air/defenses/air.shield/{'enable' if on else 'disable'}", token)
 
-def handle_anomaly(inc, base, token):
-    print(f"\n=== 이상 인시던트 LLM 분석: {inc['type']} (incident {inc['id']}) ===")
+def heuristic_verdict(inc):
+    """LLM 무키/실패 시 결정적 폴백: 이상 출처 IP 를 차단(있을 때만). LLM 미사용 환경 데모용."""
+    ip = inc.get('clientIp')
+    if not ip:
+        return None
+    return {
+        "is_attack": True,
+        "attack_class": inc.get('type', 'ANOMALY'),
+        "severity": "medium",
+        "rule": {"ip": ip, "method": "*", "action": "BLOCK"},
+        "relax_shield": True,
+        "reason": "heuristic fallback: block anomalous source IP",
+    }
+
+def handle_anomaly(inc, base, token, use_heuristic=False):
+    print(f"\n=== 이상 인시던트 분석: {inc['type']} (incident {inc['id']}) ===")
     verdict = llm_patcher.classify_and_rule(inc)
+    engine = "LLM"
+    if verdict is None and use_heuristic:
+        verdict = heuristic_verdict(inc)
+        engine = "HEURISTIC"
     if verdict is None:
-        print("[*] LLM 미사용/실패 → 일반 shield 유지, 보류")
+        hint = " (--heuristic 로 무LLM 폐루프 가능)" if not use_heuristic else " (출처 IP 없음)"
+        print(f"[*] 분류 불가{hint} → 일반 shield 유지, 보류")
         return
     if not verdict.get('is_attack'):
-        set_shield(base, token, False)                       # 오탐 → 광역 shield 완화
-        set_status(base, token, inc['id'], 'PATCHED', 'LLM_FALSE_POSITIVE')
-        print(f"[✓] 오탐 판정 → shield 완화. 사유: {verdict.get('reason')}")
+        set_shield(base, token, False)                          # 오탐 → 광역 shield 완화
+        set_status(base, token, inc['id'], 'PATCHED', f"{engine}_FALSE_POSITIVE")
+        print(f"[✓] [{engine}] 오탐 판정 → shield 완화. 사유: {verdict.get('reason')}")
         return
-    rid = add_rule(base, token, verdict.get('rule') or {})    # 정밀 룰 자동 설치
+    rid = add_rule(base, token, verdict.get('rule') or {}, source=engine)   # 정밀 룰 자동 설치
     if verdict.get('relax_shield'):
-        set_shield(base, token, False)                       # 정밀 룰로 대체 → 광역 shield 완화
-    set_status(base, token, inc['id'], 'PATCHED', f"LLM_RULE:{rid}" if rid else "LLM_RULE_FAILED")
-    print(f"[✓] 분류='{verdict.get('attack_class')}' sev={verdict.get('severity')} "
+        set_shield(base, token, False)                          # 정밀 룰로 대체 → 광역 shield 완화
+    set_status(base, token, inc['id'], 'PATCHED',
+               f"{engine}_RULE:{rid}" if rid else f"{engine}_RULE_FAILED")
+    print(f"[✓] [{engine}] 분류='{verdict.get('attack_class')}' sev={verdict.get('severity')} "
           f"→ 동적룰 설치({rid}) + shield {'완화' if verdict.get('relax_shield') else '유지'}")
 
 
@@ -209,7 +229,7 @@ def run(args):
             print(f"[*] 이상(LLM 분류) 대상 {len(anomalies)}건")
             for inc in anomalies:
                 try:
-                    handle_anomaly(inc, args.base, token)
+                    handle_anomaly(inc, args.base, token, args.heuristic)
                 except Exception as e:
                     print(f"[!] 이상 처리 예외: {e}")
         if not known and not anomalies and not args.once:
@@ -231,6 +251,8 @@ def main():
     ap.add_argument('--once', action='store_true', help='1회만 처리 후 종료')
     ap.add_argument('--no-verify', action='store_true', help='런타임 재공격 검증 생략(빠른 데모)')
     ap.add_argument('--push', action='store_true', help='검증 통과 시 origin 으로 브랜치 push')
+    ap.add_argument('--heuristic', action='store_true',
+                    help='이상 인시던트에서 LLM 무키/실패 시 결정적 휴리스틱(출처IP 차단)으로 폐루프 완료')
     run(ap.parse_args())
 
 if __name__ == '__main__':
