@@ -66,13 +66,13 @@ public class AirController {
         return ResponseEntity.ok(ApiResponse.ok(ruleRegistry.all()));
     }
 
-    /** body: { method, pathContains, contains, action(BLOCK), source } — 즉시 적용(재배포 X) */
+    /** body: { ip, method, pathContains, contains, action(BLOCK), source } — 즉시 적용(재배포 X) */
     @PostMapping("/rules")
     public ResponseEntity<ApiResponse<DynamicRule>> addRule(
             @RequestBody Map<String, String> body, @AuthenticationPrincipal User actor) {
         requireSuper(actor);
         DynamicRule r = ruleRegistry.add(
-                body.get("method"), body.get("pathContains"),
+                body.get("ip"), body.get("method"), body.get("pathContains"),
                 body.get("contains"), body.get("action"), body.getOrDefault("source", "manual"));
         return ResponseEntity.ok(ApiResponse.ok(r));
     }

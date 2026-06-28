@@ -84,3 +84,63 @@ def generate_patch(file_rel_path, original_code, incident):
     usage = resp.get("usage", {})
     print(f"[llm] 패치 생성 완료 (in={usage.get('input_tokens')} out={usage.get('output_tokens')})")
     return _strip_fences(text)
+
+
+# ── Stage3: 미지/이상 인시던트 분류 + 런타임 차단 룰 생성 ──────────
+CLASSIFY_SYSTEM = (
+    "You are AIR's autonomous security analyst for a Spring Boot e-commerce API. "
+    "An anomaly-based detector (not a signature) flagged suspicious activity and a broad "
+    "shield was already applied to the source. Decide whether it is a real attack and, if so, "
+    "author ONE minimal runtime block rule for the app's rule engine. Prefer the most precise "
+    "field available (block the offending source IP for scans/floods; use a query/path substring "
+    "for content attacks). Output JSON ONLY, no prose, no markdown fences."
+)
+
+def classify_and_rule(incident):
+    """이상/미지 인시던트를 LLM이 분류하고 동적룰을 제안. dict 또는 None(무키/실패) 반환."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("[llm] ANTHROPIC_API_KEY 없음 → 분류 생략(일반 shield 유지)")
+        return None
+
+    user = (
+        "Anomaly incident:\n"
+        f"  type: {incident.get('type')}\n"
+        f"  endpoint: {incident.get('endpoint')}\n"
+        f"  clientIp: {incident.get('clientIp')}\n"
+        f"  signal/payload: {incident.get('payload')}\n\n"
+        "Rule schema (all fields optional, matched with AND; empty string = ignore):\n"
+        '  ip, method("*"=any), pathContains, contains(query substring), action("BLOCK")\n\n'
+        "Respond ONLY with compact JSON of this exact shape:\n"
+        '{"is_attack": true, "attack_class": "...", "severity": "low|medium|high", '
+        '"rule": {"ip":"","method":"*","pathContains":"","contains":"","action":"BLOCK"}, '
+        '"relax_shield": true, "reason": "..."}'
+    )
+    body = {
+        "model": MODEL,
+        "max_tokens": 1200,
+        "system": CLASSIFY_SYSTEM,
+        "thinking": {"type": "adaptive"},
+        "output_config": {"effort": "high"},
+        "messages": [{"role": "user", "content": user}],
+    }
+    req = urllib.request.Request(API_URL, data=json.dumps(body).encode(), method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("x-api-key", api_key)
+    req.add_header("anthropic-version", ANTHROPIC_VERSION)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            resp = json.loads(r.read().decode())
+    except Exception as e:
+        print(f"[llm] 분류 호출 실패: {e} → 일반 shield 유지")
+        return None
+    if resp.get("stop_reason") == "refusal":
+        print("[llm] 안전 거부 → 일반 shield 유지")
+        return None
+    text = "".join(b.get("text", "") for b in resp.get("content", []) if b.get("type") == "text")
+    text = _strip_fences(text).strip()
+    try:
+        return json.loads(text)
+    except Exception as e:
+        print(f"[llm] JSON 파싱 실패({e}): {text[:200]} → 일반 shield 유지")
+        return None

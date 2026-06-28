@@ -55,6 +55,37 @@ git -C ~/air-repo show air/auto-patch/<id>  # 패치 내용(소스 무조건 방
 curl -s "http://localhost:8081/api/v1/air/incidents?limit=3" -H "Authorization: Bearer $TOKEN"
 ```
 
+## Stage3 — 미지(이상) 인시던트 LLM 온라인 어드바이저
+시그니처가 없는 `UNKNOWN_ANOMALY` / `ANOMALY_*` 인시던트(이상탐지→일반 shield 적용된 상태)를
+LLM이 분류하고 **런타임 동적 차단 룰을 자동 설치**한 뒤 광역 shield 를 완화한다(=정밀화).
+```
+이상탐지 → air.shield(광역, 인라인) → [orchestrator] LLM 분류(공격/유형/심각도)
+  → POST /air/rules 로 정밀 룰(ip/path/query) 자동 설치 → air.shield 완화
+  → incident status=PATCHED(action=LLM_RULE:<id>)   /  오탐이면 LLM_FALSE_POSITIVE + shield 해제
+```
+소스패치(5단계)와 달리 **git repo 불필요**(런타임 룰만 설치). 따라서 `--repo` 생략 가능.
+```bash
+# 0) ANTHROPIC_API_KEY 필수 (없으면 분류 생략 → 일반 shield 유지)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# 1) 미지 공격 → 이상탐지로 shield + UNKNOWN_ANOMALY 인시던트 생성
+python3 ~/air-lab/air-attack/attack.py --base http://localhost:8081 \
+        --admin-user qudfhr --admin-pass '3rdProject!' unknown   # 🟢 DEFENDED(shield)
+
+# 2) 오케스트레이터가 이상 인시던트를 LLM 분류 → 동적룰 자동 설치 (repo 없이)
+python3 ~/air-lab/air-orchestrator/responder.py --base http://localhost:8081 \
+        --admin-user qudfhr --admin-pass '3rdProject!' --once
+#  → [✓] 분류='SCAN/...' → 동적룰 설치(rid) + shield 완화
+```
+확인:
+```bash
+curl -s http://localhost:8081/api/v1/air/rules -H "$AUTH"; echo            # source=LLM 룰
+curl -s "http://localhost:8081/api/v1/air/incidents?limit=3" -H "$AUTH"    # action=LLM_RULE:<id>
+```
+> lab 한계: 모든 트래픽이 nginx 단일 IP 로 오므로 LLM 이 IP 룰을 만들면 lab 전체에 적용될 수 있다.
+> (운영의 실제 다중 클라이언트 IP 에서는 출처 정밀 차단으로 동작.) 검증 성공 기준 = 인시던트가
+> 자율적으로 분류→룰 설치→PATCHED 로 전이되는 것.
+
 ## 실행 옵션
 | 옵션 | 의미 |
 |---|---|

@@ -19,9 +19,11 @@ public class DynamicRuleRegistry {
 
     private final List<DynamicRule> rules = new CopyOnWriteArrayList<>();
 
-    public DynamicRule add(String method, String pathContains, String contains, String action, String source) {
+    public DynamicRule add(String ip, String method, String pathContains, String contains,
+                           String action, String source) {
         DynamicRule r = new DynamicRule(
                 UlidUtil.generate(),
+                ip,
                 method == null ? "*" : method,
                 pathContains,
                 contains,
@@ -29,8 +31,8 @@ public class DynamicRuleRegistry {
                 source == null ? "manual" : source,
                 System.currentTimeMillis());
         rules.add(r);
-        log.warn("[AIR] 동적 룰 설치: {} {} contains='{}' -> {} ({})",
-                r.getMethod(), r.getPathContains(), r.getContains(), r.getAction(), r.getSource());
+        log.warn("[AIR] 동적 룰 설치: ip='{}' {} {} contains='{}' -> {} ({})",
+                r.getIp(), r.getMethod(), r.getPathContains(), r.getContains(), r.getAction(), r.getSource());
         return r;
     }
 
@@ -43,9 +45,9 @@ public class DynamicRuleRegistry {
     }
 
     /** 매칭되는 첫 룰 반환(없으면 null). */
-    public DynamicRule match(String method, String uri, String query) {
+    public DynamicRule match(String method, String uri, String query, String ip) {
         for (DynamicRule r : rules) {
-            if (r.matches(method, uri, query)) return r;
+            if (r.matches(method, uri, query, ip)) return r;
         }
         return null;
     }

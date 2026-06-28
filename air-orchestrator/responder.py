@@ -45,6 +45,42 @@ def set_status(base, token, inc_id, status, action):
     api(base, 'POST', f'/api/v1/air/incidents/{inc_id}/status?status={status}&action={action}', token)
 
 
+# ── Stage3: 이상/미지 인시던트 LLM 분류 → 런타임 동적룰 자동 설치 ──
+ANOMALY_PREFIXES = ("UNKNOWN", "ANOMALY")
+
+def add_rule(base, token, rule):
+    st, j = api(base, 'POST', '/api/v1/air/rules', token, {
+        'ip':           rule.get('ip', '') or '',
+        'method':       rule.get('method', '*') or '*',
+        'pathContains': rule.get('pathContains', '') or '',
+        'contains':     rule.get('contains', '') or '',
+        'action':       rule.get('action', 'BLOCK') or 'BLOCK',
+        'source':       'LLM',
+    })
+    return (j or {}).get('data', {}).get('id') if st == 200 else None
+
+def set_shield(base, token, on):
+    api(base, 'POST', f"/api/v1/air/defenses/air.shield/{'enable' if on else 'disable'}", token)
+
+def handle_anomaly(inc, base, token):
+    print(f"\n=== 이상 인시던트 LLM 분석: {inc['type']} (incident {inc['id']}) ===")
+    verdict = llm_patcher.classify_and_rule(inc)
+    if verdict is None:
+        print("[*] LLM 미사용/실패 → 일반 shield 유지, 보류")
+        return
+    if not verdict.get('is_attack'):
+        set_shield(base, token, False)                       # 오탐 → 광역 shield 완화
+        set_status(base, token, inc['id'], 'PATCHED', 'LLM_FALSE_POSITIVE')
+        print(f"[✓] 오탐 판정 → shield 완화. 사유: {verdict.get('reason')}")
+        return
+    rid = add_rule(base, token, verdict.get('rule') or {})    # 정밀 룰 자동 설치
+    if verdict.get('relax_shield'):
+        set_shield(base, token, False)                       # 정밀 룰로 대체 → 광역 shield 완화
+    set_status(base, token, inc['id'], 'PATCHED', f"LLM_RULE:{rid}" if rid else "LLM_RULE_FAILED")
+    print(f"[✓] 분류='{verdict.get('attack_class')}' sev={verdict.get('severity')} "
+          f"→ 동적룰 설치({rid}) + shield {'완화' if verdict.get('relax_shield') else '유지'}")
+
+
 # ── git ───────────────────────────────────────────────────────
 def git(repo, *args, check=True):
     r = subprocess.run(['git', '-C', repo, *args], capture_output=True, text=True)
@@ -140,10 +176,11 @@ def _rollback(repo, base_branch, branch):
 
 # ── 메인 루프 ─────────────────────────────────────────────────
 def run(args):
-    if not os.path.isdir(os.path.join(args.repo, '.git')):
-        sys.exit(f"[!] {args.repo} 는 git 저장소가 아닙니다 (clone 필요).")
-    base_branch = args.branch_base or current_branch(args.repo)
-    print(f"[*] 오케스트레이터 시작: target={args.base} repo={args.repo} base={base_branch} "
+    repo_ok = bool(args.repo) and os.path.isdir(os.path.join(args.repo, '.git'))
+    if args.repo and not repo_ok:
+        print(f"[!] {args.repo} 는 git 저장소가 아님 → 소스패치 비활성(이상 LLM 분류만 동작)")
+    base_branch = (args.branch_base or current_branch(args.repo)) if repo_ok else None
+    print(f"[*] 오케스트레이터 시작: target={args.base} repo={args.repo or '(없음)'} base={base_branch} "
           f"verify={'on' if not args.no_verify else 'off'} push={'on' if args.push else 'off'}")
 
     token = login(args.base, args.admin_user, args.admin_pass)
@@ -152,19 +189,30 @@ def run(args):
         if st == 401:                       # 토큰 만료 재로그인
             token = login(args.base, args.admin_user, args.admin_pass); continue
         incidents = (j or {}).get('data', []) if st == 200 else []
-        # 오래된 것부터, 미처리(MITIGATED) + 패치 가능 유형만
-        todo = [i for i in reversed(incidents)
-                if i.get('status') == 'MITIGATED' and i.get('type') in VULNS]
-        if todo:
-            print(f"[*] 처리 대상 인시던트 {len(todo)}건")
-            for inc in todo:
+        mitigated = [i for i in reversed(incidents) if i.get('status') == 'MITIGATED']  # 오래된 것부터
+        known     = [i for i in mitigated if i.get('type') in VULNS]                    # 시그니처 → 소스패치
+        anomalies = [i for i in mitigated if i.get('type') not in VULNS
+                     and str(i.get('type', '')).startswith(ANOMALY_PREFIXES)]           # 미지/이상 → LLM 룰
+
+        if known and repo_ok:
+            print(f"[*] 소스패치 대상 {len(known)}건")
+            for inc in known:
                 try:
                     handle(inc, args.base, token, args.repo, base_branch,
                            not args.no_verify, args.push, args.admin_user, args.admin_pass)
                 except Exception as e:
                     print(f"[!] 처리 중 예외: {e}")
                     _rollback(args.repo, base_branch, f"air/auto-patch/{inc['id'][:10].lower()}")
-        elif not args.once:
+        elif known and not repo_ok:
+            print(f"[.] 소스패치 대상 {len(known)}건 있으나 repo 없음 → 스킵(이상 LLM 분류만)")
+        if anomalies:
+            print(f"[*] 이상(LLM 분류) 대상 {len(anomalies)}건")
+            for inc in anomalies:
+                try:
+                    handle_anomaly(inc, args.base, token)
+                except Exception as e:
+                    print(f"[!] 이상 처리 예외: {e}")
+        if not known and not anomalies and not args.once:
             print(f"[.] 대기… ({args.interval}s)")
         if args.once:
             break
@@ -176,7 +224,8 @@ def main():
     ap.add_argument('--base', required=True, help='타깃 lab URL (예: http://localhost:8081)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('--repo', required=True, help='패치 대상 git 저장소 경로')
+    ap.add_argument('--repo', required=False, default=None,
+                    help='패치 대상 git 저장소 경로(소스패치용). 없으면 이상 LLM 분류만 동작')
     ap.add_argument('--branch-base', default=None, help='패치 분기 기준 브랜치(기본: 현재 브랜치)')
     ap.add_argument('--interval', type=int, default=15, help='폴링 주기(초)')
     ap.add_argument('--once', action='store_true', help='1회만 처리 후 종료')

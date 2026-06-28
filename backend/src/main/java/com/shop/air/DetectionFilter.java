@@ -125,7 +125,7 @@ public class DetectionFilter extends OncePerRequestFilter {
 
         // ── [Stage2] 런타임 동적 룰: 매칭 시 즉시 차단 (제어플레인 제외) ──
         if (!controlPlane) {
-            DynamicRule rule = ruleRegistry.match(method, uri, req.getQueryString());
+            DynamicRule rule = ruleRegistry.match(method, uri, req.getQueryString(), ip);
             if (rule != null) {
                 block(res, 429, "RULE_BLOCKED", "동적 차단 룰에 의해 거부되었습니다.");
                 return;
