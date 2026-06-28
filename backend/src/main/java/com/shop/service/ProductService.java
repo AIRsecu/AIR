@@ -2,6 +2,7 @@ package com.shop.service;
 
 import com.shop.domain.Product;
 import com.shop.domain.User;
+import com.shop.air.DefenseRegistry;
 import com.shop.dto.product.*;
 import com.shop.exception.AppException;
 import com.shop.mapper.ProductMapper;
@@ -17,11 +18,22 @@ import java.util.List;
 public class ProductService {
 
     private final ProductMapper productMapper;
+    private final DefenseRegistry defense;   // [AIR] 방어 토글
 
     public List<Product> listByTenant(String tenantId, boolean activeOnly) {
         return activeOnly
                 ? productMapper.findActiveByTenantId(tenantId)
                 : productMapper.findByTenantId(tenantId);
+    }
+
+    /**
+     * [AIR] 상품명 검색. sql.injection-guard ON 이면 안전 바인딩(#{}),
+     * OFF 면 취약한 동적 SQL(${}) 을 사용 → SQL Injection 시연/방어 토글.
+     */
+    public List<Product> search(String tenantId, String q) {
+        return defense.isEnabled(DefenseRegistry.SQL_INJECTION_GUARD)
+                ? productMapper.searchByNameSafe(tenantId, q)
+                : productMapper.searchByNameVulnerable(tenantId, q);
     }
 
     public Product getById(String id) {

@@ -36,23 +36,50 @@ public class DetectionFilter extends OncePerRequestFilter {
     private static final Pattern ORDER_CREATE =
             Pattern.compile("^/api/v1/tenants/[^/]+/orders/?$");
 
+    // GET /api/v1/tenants/{tid}/products/search
+    private static final Pattern PRODUCT_SEARCH =
+            Pattern.compile("^/api/v1/tenants/[^/]+/products/search/?$");
+
+    // SQL Injection 시그니처(대소문자 무시): UNION SELECT / OR 1=1 / 주석 / 세미콜론 / DROP 등
+    private static final Pattern SQLI_SIGNATURE = Pattern.compile(
+            "(?i)(\\bunion\\b\\s+\\bselect\\b" +
+            "|\\bor\\b\\s+['\"]?\\d+['\"]?\\s*=\\s*['\"]?\\d+" +
+            "|';|--|/\\*|\\bdrop\\b\\s+\\btable\\b|\\bselect\\b.+\\bfrom\\b)");
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
-        boolean inspectBody = registry.isEnabled(DefenseRegistry.DETECTION)
-                && "POST".equalsIgnoreCase(req.getMethod())
-                && ORDER_CREATE.matcher(req.getRequestURI()).matches();
+        if (!registry.isEnabled(DefenseRegistry.DETECTION)) { chain.doFilter(req, res); return; }
 
-        if (!inspectBody) { chain.doFilter(req, res); return; }
+        String uri = req.getRequestURI();
 
-        CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
-        try {
-            detectNegativeQty(cached);
-        } catch (Exception e) {
-            log.debug("[AIR] 탐지 파싱 스킵: {}", e.getMessage());
+        // ── SQL Injection: 상품 검색 q 파라미터 시그니처 검사 (GET, 본문 없음) ──
+        if ("GET".equalsIgnoreCase(req.getMethod()) && PRODUCT_SEARCH.matcher(uri).matches()) {
+            try {
+                String q = req.getParameter("q");
+                if (q != null && SQLI_SIGNATURE.matcher(q).find())
+                    incidentService.report("SQLI_ATTEMPT", uri, clientIp(req), null, "q=" + q);
+            } catch (Exception e) {
+                log.debug("[AIR] SQLi 탐지 스킵: {}", e.getMessage());
+            }
+            chain.doFilter(req, res);
+            return;
         }
-        chain.doFilter(cached, res);
+
+        // ── 음수수량 자금증식: 주문 생성 본문 검사 (POST) ──
+        if ("POST".equalsIgnoreCase(req.getMethod()) && ORDER_CREATE.matcher(uri).matches()) {
+            CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
+            try {
+                detectNegativeQty(cached);
+            } catch (Exception e) {
+                log.debug("[AIR] 탐지 파싱 스킵: {}", e.getMessage());
+            }
+            chain.doFilter(cached, res);
+            return;
+        }
+
+        chain.doFilter(req, res);
     }
 
     private void detectNegativeQty(CachedBodyHttpServletRequest req) throws IOException {

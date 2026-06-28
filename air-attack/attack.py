@@ -17,7 +17,7 @@ AIR PoC 공격 모듈 (의존성 없음 / stdlib only)
 패치 후 재실행 시 DEFENDED 가 나오면 자동 방어 성공.
 종료코드: 공격 성공(취약)=1, 방어됨=0  (CI/검증에서 활용)
 """
-import argparse, json, random, sys, time, urllib.request, urllib.error
+import argparse, json, random, sys, time, urllib.parse, urllib.request, urllib.error
 
 def call(base, method, path, token=None, body=None):
     url = base.rstrip('/') + path
@@ -90,15 +90,46 @@ def attack_negative_qty(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🟢 DEFENDED — 공격 차단됨 (주문 거부 또는 잔액 불변)")
         return 0
 
+def attack_sqli(base, admin_user, admin_pass):
+    print("=== AIR PoC: SQL Injection (상품 검색 필터 우회) ===")
+    admin_tok, _ = login(base, admin_user, admin_pass)
+    tid, pid, cu, cp = prepare(base, admin_tok)
+
+    # 검색 헬퍼: GET /products/search?q=...  (q 는 URL 인코딩)
+    def search(q):
+        path = f"/api/v1/tenants/{tid}/products/search?q=" + urllib.parse.quote(q, safe='')
+        st, j = call(base, 'GET', path, admin_tok)
+        rows = (j or {}).get('data') or []
+        return st, rows
+
+    # 1) 절대 매칭 안 되는 무의미 검색 → 0건이 정상(기준선)
+    benign = f"zzz_nomatch_{int(time.time())}"
+    st_b, rows_b = search(benign)
+    print(f"[*] 기준선 검색 q='{benign}' → HTTP {st_b}, {len(rows_b)}건 (정상=0)")
+
+    # 2) 인젝션: ' OR '1'='1  → 취약 시 name LIKE '%' 로 전개되어 전체 반환
+    inj = "' OR '1'='1"
+    st_i, rows_i = search(inj)
+    print(f"[>] 인젝션 검색 q=\"{inj}\" → HTTP {st_i}, {len(rows_i)}건")
+
+    if st_i == 200 and len(rows_i) > 0:
+        print(f"\n[RESULT] 🔴 VULNERABLE — 인젝션으로 필터 우회({len(rows_i)}건 노출). ${{}} 동적쿼리 취약.")
+        return 1
+    else:
+        print(f"\n[RESULT] 🟢 DEFENDED — 인젝션 무력화(0건/차단). 안전 바인딩 또는 탐지→방어 활성.")
+        return 0
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'sqli':
+        sys.exit(attack_sqli(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()

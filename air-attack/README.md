@@ -48,6 +48,31 @@ curl -s $BASE/api/v1/air/defenses  -H "$AUTH"   # order.qty-guard: true (자동 
 curl -s "$BASE/api/v1/air/incidents?limit=10" -H "$AUTH"
 ```
 
+## 시나리오 2 — SQL Injection (상품 검색 필터 우회)
+
+취약 표면: `GET /api/v1/tenants/{tid}/products/search?q=...`
+- `sql.injection-guard` **OFF** → 매퍼가 `name LIKE '%${q}%'` (동적 SQL) → 인젝션 가능
+- `sql.injection-guard` **ON**  → `name LIKE '%' || #{q} || '%'` (안전 바인딩) → 리터럴 처리
+- 탐지: `DetectionFilter` 가 `q` 에서 SQLi 시그니처(`' OR '1'='1`, `UNION SELECT`, `--` 등) 발견 시
+  `SQLI_ATTEMPT` 보고 → `IncidentService` 가 `sql.injection-guard` 즉시 ON.
+
+```bash
+# 취약 시연 (탐지 OFF → 실제 익스플로잇)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/disable      -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/sql.injection-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> sqli
+# → 🔴 VULNERABLE — 인젝션으로 전체 상품 노출
+
+# 자율 방어 시연 (탐지 ON + 방어 리셋 → 공격 순간 자동 차단)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/enable       -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/sql.injection-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> sqli
+# → 🟢 DEFENDED — 탐지 즉시 sql.injection-guard 활성화 → 안전 바인딩으로 0건
+
+curl -s $BASE/api/v1/air/defenses -H "$AUTH"             # sql.injection-guard: true
+curl -s "$BASE/api/v1/air/incidents?limit=10" -H "$AUTH" # SQLI_ATTEMPT 기록
+```
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 
