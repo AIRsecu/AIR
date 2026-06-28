@@ -44,7 +44,10 @@
 ## 구성요소
 - `responder.py` — 폴링·git·검증·커밋 오케스트레이션 (stdlib)
 - `llm_patcher.py` — Anthropic Messages API 호출(urllib). 모델 `claude-opus-4-8`, adaptive thinking + effort high. `ANTHROPIC_API_KEY` 없으면 None → 템플릿 폴백
-- `knowledge.py` — 취약점 KB(유형→파일/방어키/시나리오/템플릿/검증식)
+- `knowledge.py` — 취약점 KB(유형→파일/방어키/시나리오/템플릿/검증식).
+  [Stage4] 로직 취약점 4종 자동 소스패치 커버: ORDER_NEGATIVE_QTY / SQLI_ATTEMPT /
+  XSS_ATTEMPT / IDOR_ATTEMPT (각 항상-방어 템플릿 + 검증식). LLM(길1) 있으면 LLM 패치 우선,
+  없으면 템플릿 폴백. ※ DDoS/랜섬은 본질상 런타임 레이트가드가 정답이라 소스패치 비대상.
 - `verify.sh` + `../docker-compose.verify.yml` — 포트 8082 throwaway 스택으로 패치 빌드·재공격 검증
 - 백엔드: `POST /api/v1/air/incidents/{id}/status` (오케스트레이터가 결과 기록)
 
