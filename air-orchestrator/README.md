@@ -23,16 +23,23 @@
   → 즉 지금은 무료 데모로 돌리고, 나중에 키만 export 하면 자동으로 실제 LLM 으로 승급된다.
 - **길1 복귀(실제 LLM) 방법** — 코드 수정 없이 환경변수만:
   ```bash
-  # (권장) Groq 무료키: https://console.groq.com → API Keys
-  export AIR_LLM_PROVIDER=groq;      export GROQ_API_KEY=gsk_...
-  # 또는 Gemini 무료키(단, 프로젝트 무료 quota 필요): https://aistudio.google.com
-  # export AIR_LLM_PROVIDER=gemini;  export GEMINI_API_KEY=AIza...
-  # 또는 Anthropic(유료, 크레딧): export AIR_LLM_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
-  python3 responder.py --base http://localhost:8081 --admin-user qudfhr --admin-pass '3rdProject!' --once
-  #  → [✓] [LLM] 분류=... → 동적룰 설치   (--heuristic 없이도 LLM 으로 동작)
+  # ★ 계획된 길1 = Anthropic Claude API (모델 claude-opus-4-8) — 크레딧 필요
+  export AIR_LLM_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
+  # (무료 대안) Groq: console.groq.com  → export AIR_LLM_PROVIDER=groq; export GROQ_API_KEY=gsk_...
+  # (무료 대안) Gemini(프로젝트 무료 quota 필요): export AIR_LLM_PROVIDER=gemini; export GEMINI_API_KEY=AIza...
+
+  # shield 격리(공유 IP)로 orchestrator 로그인이 막힐 수 있어 토큰 주입 권장:
+  TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/login -H 'Content-Type: application/json' \
+    -d '{"username":"qudfhr","password":"3rdProject!"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
+  python3 responder.py --base http://localhost:8081 --token "$TOKEN" --once
+  #  → [✓] [LLM] 분류=... → 동적룰 설치   (--heuristic 없이 LLM 으로 동작)
   ```
-  ※ 2026-06-28 기준: Anthropic·Gemini 모두 결제/무료 quota 벽 → 당분간 `--heuristic` 무료 데모 채택.
-    Groq 무료키 확보 시 길1 로 즉시 승급 가능.
+  ※ 2026-06-28 기준: Anthropic 결제 불가 + Gemini 무료 quota=0(429) → 당분간 `--heuristic` 무료 데모 채택.
+    결제 가능 시 길1 = **Anthropic** 로 복귀(키만 export). Groq 무료키로도 즉시 승급 가능.
+
+- **shield 격리 회피(--token)**: lab 은 모든 트래픽이 nginx 단일 IP → unknown 공격이 그 IP 를
+  격리하면 orchestrator 의 로그인(`/auth/login`)도 429 된다. 미리 발급한 토큰을 `--token` 으로
+  주입하면 /air/* (제어플레인 예외)로만 동작해 차단되지 않는다. (또는 격리 30s 만료 후 실행)
 
 ## 구성요소
 - `responder.py` — 폴링·git·검증·커밋 오케스트레이션 (stdlib)

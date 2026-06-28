@@ -203,11 +203,19 @@ def run(args):
     print(f"[*] 오케스트레이터 시작: target={args.base} repo={args.repo or '(없음)'} base={base_branch} "
           f"verify={'on' if not args.no_verify else 'off'} push={'on' if args.push else 'off'}")
 
-    token = login(args.base, args.admin_user, args.admin_pass)
+    # 토큰 우선(--token): orchestrator 가 shield 격리된 IP 라도 로그인 없이 동작.
+    # /air/* 호출은 제어플레인 예외라 차단되지 않음.
+    token = args.token
+    if not token:
+        if not (args.admin_user and args.admin_pass):
+            sys.exit("[!] --token 또는 --admin-user/--admin-pass 가 필요합니다.")
+        token = login(args.base, args.admin_user, args.admin_pass)
     while True:
         st, j = api(args.base, 'GET', '/api/v1/air/incidents?limit=100', token)
-        if st == 401:                       # 토큰 만료 재로그인
-            token = login(args.base, args.admin_user, args.admin_pass); continue
+        if st == 401:                       # 토큰 만료
+            if args.admin_user and args.admin_pass:
+                token = login(args.base, args.admin_user, args.admin_pass); continue
+            print("[!] 토큰 만료/무효 + 재로그인 자격 없음 → 종료"); break
         incidents = (j or {}).get('data', []) if st == 200 else []
         mitigated = [i for i in reversed(incidents) if i.get('status') == 'MITIGATED']  # 오래된 것부터
         known     = [i for i in mitigated if i.get('type') in VULNS]                    # 시그니처 → 소스패치
@@ -242,8 +250,10 @@ def run(args):
 def main():
     ap = argparse.ArgumentParser(description="AIR 자율 방어 오케스트레이터")
     ap.add_argument('--base', required=True, help='타깃 lab URL (예: http://localhost:8081)')
-    ap.add_argument('--admin-user', required=True)
-    ap.add_argument('--admin-pass', required=True)
+    ap.add_argument('--admin-user', required=False, default=None)
+    ap.add_argument('--admin-pass', required=False, default=None)
+    ap.add_argument('--token', default=None,
+                    help='미리 발급한 액세스 토큰(권장). shield 격리 IP 에서도 /air/* 로 동작')
     ap.add_argument('--repo', required=False, default=None,
                     help='패치 대상 git 저장소 경로(소스패치용). 없으면 이상 LLM 분류만 동작')
     ap.add_argument('--branch-base', default=None, help='패치 분기 기준 브랜치(기본: 현재 브랜치)')
