@@ -10,6 +10,30 @@
   → 통과: 커밋(+선택 push), 인시던트 status=PATCHED / 실패: 롤백, status=FAILED(런타임 플래그 유지)
 ```
 
+## ⭐ 동작 모드 (무료 데모 ↔ 실제 LLM 복귀)
+
+이 오케스트레이터의 이상(미지) 인시던트 대응은 **2가지 모드**로 동작한다.
+
+| 모드 | 트리거 | 분류 엔진 | 비용 | 비고 |
+|---|---|---|---|---|
+| **무료 데모(현재 채택)** | `--heuristic` | 결정적 휴리스틱(출처 IP 차단) | 0원, 키 불필요 | 자율 폐루프 시연용 |
+| **실제 LLM(길1, 추후 복귀)** | provider 키 설정 | Claude/Gemini/Groq | Groq·Gemini 무료티어 / Anthropic 유료 | 키만 주면 **코드변경 0** |
+
+- **우선순위**: 키가 있으면 LLM 우선, 실패/무키일 때만 휴리스틱(`--heuristic` 준 경우).
+  → 즉 지금은 무료 데모로 돌리고, 나중에 키만 export 하면 자동으로 실제 LLM 으로 승급된다.
+- **길1 복귀(실제 LLM) 방법** — 코드 수정 없이 환경변수만:
+  ```bash
+  # (권장) Groq 무료키: https://console.groq.com → API Keys
+  export AIR_LLM_PROVIDER=groq;      export GROQ_API_KEY=gsk_...
+  # 또는 Gemini 무료키(단, 프로젝트 무료 quota 필요): https://aistudio.google.com
+  # export AIR_LLM_PROVIDER=gemini;  export GEMINI_API_KEY=AIza...
+  # 또는 Anthropic(유료, 크레딧): export AIR_LLM_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
+  python3 responder.py --base http://localhost:8081 --admin-user qudfhr --admin-pass '3rdProject!' --once
+  #  → [✓] [LLM] 분류=... → 동적룰 설치   (--heuristic 없이도 LLM 으로 동작)
+  ```
+  ※ 2026-06-28 기준: Anthropic·Gemini 모두 결제/무료 quota 벽 → 당분간 `--heuristic` 무료 데모 채택.
+    Groq 무료키 확보 시 길1 로 즉시 승급 가능.
+
 ## 구성요소
 - `responder.py` — 폴링·git·검증·커밋 오케스트레이션 (stdlib)
 - `llm_patcher.py` — Anthropic Messages API 호출(urllib). 모델 `claude-opus-4-8`, adaptive thinking + effort high. `ANTHROPIC_API_KEY` 없으면 None → 템플릿 폴백
