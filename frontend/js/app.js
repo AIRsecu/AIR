@@ -255,9 +255,13 @@ async function openSignupModal() {
   });
 }
 
-// ── 알림 폴링 (가입요청 + 충전요청) ───────────────────────
+// ── 실시간 알림 (SSE) + 안전 reconcile ─────────────────────
+// 변경 발생 시점에만 서버가 이벤트를 push → 폴링(구 20초) 대체.
+// EventSource 끊김/토큰만료/유실 대비로 60초 백스톱 reconcile 를 함께 운용.
 let notif = { items: [], total: 0, inited: false };
-let notifTimer = null;
+let notifES        = null;   // EventSource
+let notifReconnect = null;   // 재연결 setTimeout
+let reconcileTimer = null;   // 60초 백스톱 setInterval
 
 const notifEligible = () => isSuper() || isAdmin();
 const findNotif = (tid) => notif.items.find(i => i.tenantId === tid) || {};
@@ -265,16 +269,23 @@ const signupCountFor = (tid) => findNotif(tid).signupCount || 0;
 const chargeCountFor = (tid) => findNotif(tid).chargeCount || 0;
 const orderCountFor  = (tid) => findNotif(tid).orderCount  || 0;
 
-async function refreshNotif(allowToast) {
-  if (!session() || !notifEligible()) return;
-  let items;
-  try { items = (await API.pendingNotifications()).data || []; }
-  catch { return; }
+// 관리자 대기집계 적용(증가 시 토스트) — SSE 'pending' 이벤트와 백스톱 조회가 공용
+function applyManagerNotif(items, allowToast) {
+  items = items || [];
   const total = items.reduce((a, x) => a + (x.signupCount || 0) + (x.chargeCount || 0) + (x.orderCount || 0), 0);
   if (allowToast && notif.inited && total > notif.total)
     toast(`새 요청 ${total - notif.total}건이 접수되었습니다.`, 'info', '🔔 알림');
   notif = { items, total, inited: true };
   renderBell();
+}
+
+// 백스톱/초기 동기화용 직접 조회(액세스 토큰 자동 갱신 효과 겸함)
+async function refreshNotif(allowToast) {
+  if (!session() || !notifEligible()) return;
+  let items;
+  try { items = (await API.pendingNotifications()).data || []; }
+  catch { return; }
+  applyManagerNotif(items, allowToast);
 }
 
 function renderBell() {
@@ -324,18 +335,69 @@ async function refreshCustomerNotif(allowToast) {
   refreshBalance();
 }
 
-function startNotifPolling() {
+// SSE 연결: 변경 발생 시점에만 이벤트 수신(pending/order/charge)
+function connectNotifStream() {
+  if (!session() || typeof EventSource === 'undefined') return;
+  closeNotifStream();
+  let es;
+  try { es = new EventSource(API.streamUrl()); }
+  catch { return; }
+  notifES = es;
+
+  // 관리자: 대기 집계 갱신 + (admin) 정산 잔액 즉시 반영
+  es.addEventListener('pending', (e) => {
+    let items = []; try { items = JSON.parse(e.data); } catch { /* ignore */ }
+    applyManagerNotif(items, true);
+    refreshBalance();
+  });
+  // 고객: 본인 주문 상태 변경
+  es.addEventListener('order', (e) => {
+    let d = {}; try { d = JSON.parse(e.data); } catch { /* ignore */ }
+    toast(`주문 상태가 '${statusKo(d.status)}'(으)로 변경되었습니다.`, 'info', '🔔 주문 알림');
+    if (custSnap && d.orderId) custSnap.orders[d.orderId] = d.status;   // reconcile 중복 토스트 방지
+    refreshBalance();
+    if ((location.hash || '').includes('orders')) router();            // 보고 있으면 즉시 재렌더
+  });
+  // 고객: 본인 충전요청 처리(승인/반려)
+  es.addEventListener('charge', (e) => {
+    let d = {}; try { d = JSON.parse(e.data); } catch { /* ignore */ }
+    toast(`충전 요청이 ${d.status === 'approved' ? '승인' : '반려'}되었습니다.`,
+          d.status === 'approved' ? 'success' : 'info', '🔔 충전 알림');
+    if (custSnap && d.chargeId) custSnap.charges[d.chargeId] = d.status;
+    refreshBalance();
+  });
+
+  // 끊김/토큰만료 → 닫고 잠시 후 최신 토큰으로 재연결(백스톱 reconcile 이 토큰 갱신)
+  es.onerror = () => {
+    closeNotifStream();
+    if (!notifReconnect && session())
+      notifReconnect = setTimeout(() => { notifReconnect = null; connectNotifStream(); }, 4000);
+  };
+}
+function closeNotifStream() {
+  if (notifES) { try { notifES.close(); } catch { /* ignore */ } notifES = null; }
+}
+
+function startNotifPolling() {   // 이름 유지(호출부 호환) — 내부는 SSE 실시간 + 백스톱
   stopNotifPolling();
-  if (notifEligible()) {
-    refreshNotif(false);
-    notifTimer = setInterval(() => refreshNotif(true), 20000);
-  } else if (isCust()) {
-    refreshCustomerNotif(false);
-    notifTimer = setInterval(() => refreshCustomerNotif(true), 20000);
-  }
+  if (!session()) return;
+  // 1) 초기 1회 동기화(첫 화면 즉시 반영 + 고객 스냅샷/잔액 시드)
+  if (notifEligible()) refreshNotif(false);
+  else if (isCust())   refreshCustomerNotif(false);
+  // 2) 실시간 스트림 연결
+  connectNotifStream();
+  // 3) 안전 reconcile(60초): 유실/끊김 보정 + 액세스 토큰 자동 갱신 + 필요 시 재연결
+  reconcileTimer = setInterval(() => {
+    if (!session()) return;
+    if (notifEligible()) refreshNotif(true);
+    else if (isCust())   refreshCustomerNotif(true);
+    if (!notifES) connectNotifStream();
+  }, 60000);
 }
 function stopNotifPolling() {
-  if (notifTimer) { clearInterval(notifTimer); notifTimer = null; }
+  closeNotifStream();
+  if (notifReconnect) { clearTimeout(notifReconnect); notifReconnect = null; }
+  if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
   notif = { items: [], total: 0, inited: false };
   custSnap = null;
 }

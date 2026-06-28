@@ -128,7 +128,7 @@ public class OrderService {
     }
 
     @Transactional
-    public void updateStatus(String id, String status, User actor) {
+    public Order updateStatus(String id, String status, User actor) {
         Order order = orderMapper.findById(id)
                 .orElseThrow(() -> AppException.notFound("주문을 찾을 수 없습니다."));
 
@@ -169,5 +169,6 @@ public class OrderService {
         }
 
         orderMapper.updateStatus(id, status);
+        return getById(id);
     }
 }

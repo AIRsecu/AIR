@@ -32,9 +32,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain chain)
             throws ServletException, IOException {
 
+        // 일반 요청은 Authorization 헤더 사용.
+        // SSE(EventSource)는 헤더를 못 보내므로 ?token= 쿼리 파라미터를 폴백으로 허용.
         String header = req.getHeader("Authorization");
+        String token = null;
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+            token = header.substring(7);
+        } else {
+            String q = req.getParameter("token");
+            if (q != null && !q.isBlank()) token = q;
+        }
+
+        if (token != null) {
             try {
                 Claims claims = jwt.verifyAccess(token);
                 String userId = claims.getSubject();

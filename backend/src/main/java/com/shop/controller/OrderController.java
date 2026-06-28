@@ -4,6 +4,7 @@ import com.shop.domain.Order;
 import com.shop.domain.User;
 import com.shop.dto.ApiResponse;
 import com.shop.dto.order.PlaceOrderRequest;
+import com.shop.service.NotificationService;
 import com.shop.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class OrderController {
 
     private final OrderService orderService;
+    private final NotificationService notificationService;
 
     /** admin – 해당 테넌트의 전체 주문 */
     @GetMapping
@@ -53,6 +55,7 @@ public class OrderController {
             @Valid @RequestBody PlaceOrderRequest req,
             @AuthenticationPrincipal User actor) {
         Order order = orderService.placeOrder(tenantId, req, actor);
+        notificationService.notifyTenantActivity(tenantId);   // 새 대기 주문 → 관리자 실시간 알림
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(order));
     }
 
@@ -62,7 +65,10 @@ public class OrderController {
             @PathVariable String id,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User actor) {
-        orderService.updateStatus(id, body.get("status"), actor);
+        Order order = orderService.updateStatus(id, body.get("status"), actor);
+        // 관리자 대기집계 갱신 + 주문 소유 고객에게 상태변경 실시간 알림
+        notificationService.notifyTenantActivity(order.getTenantId());
+        notificationService.notifyOrder(order.getCustomerId(), order.getId(), order.getStatus().name());
         return ResponseEntity.ok(ApiResponse.ok());
     }
 }
