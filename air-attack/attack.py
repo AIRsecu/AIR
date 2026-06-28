@@ -187,12 +187,32 @@ def attack_idor(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🟢 DEFENDED — 소유자 검증으로 차단(HTTP {st}).")
         return 0
 
+def attack_ddos(base, admin_user, admin_pass):
+    print("=== AIR PoC: DDoS (요청 폭주 / rate flood) ===")
+    n = 60   # 10초 창 허용치(30)를 넘기도록 폭주
+    codes = {}
+    blocked = 0
+    print(f"[>] /api/v1/health 로 {n}회 연속 요청")
+    for _ in range(n):
+        st, _ = call(base, 'GET', '/api/v1/health')
+        codes[st] = codes.get(st, 0) + 1
+        if st == 429:
+            blocked += 1
+    print(f"[<] 상태코드 분포: {codes}")
+
+    if blocked > 0:
+        print(f"\n[RESULT] 🟢 DEFENDED — {blocked}건 429 차단(rate-limit 적용).")
+        return 0
+    else:
+        print(f"\n[RESULT] 🔴 VULNERABLE — 전부 통과(레이트리밋 없음).")
+        return 1
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
@@ -202,6 +222,8 @@ def main():
         sys.exit(attack_xss(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'idor':
         sys.exit(attack_idor(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'ddos':
+        sys.exit(attack_ddos(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()

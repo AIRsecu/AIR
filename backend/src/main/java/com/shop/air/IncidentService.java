@@ -26,7 +26,8 @@ public class IncidentService {
             "ORDER_NEGATIVE_QTY", DefenseRegistry.ORDER_QTY_GUARD,
             "SQLI_ATTEMPT",       DefenseRegistry.SQL_INJECTION_GUARD,
             "XSS_ATTEMPT",        DefenseRegistry.XSS_INPUT_GUARD,
-            "IDOR_ATTEMPT",       DefenseRegistry.AUTHZ_IDOR_GUARD
+            "IDOR_ATTEMPT",       DefenseRegistry.AUTHZ_IDOR_GUARD,
+            "DDOS_FLOOD",         DefenseRegistry.DDOS_RATE_GUARD
     );
 
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {

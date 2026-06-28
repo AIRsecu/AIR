@@ -14,6 +14,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -55,13 +59,47 @@ public class DetectionFilter extends OncePerRequestFilter {
             "(?i)(<\\s*script|<\\s*/\\s*script|onerror\\s*=|onload\\s*=|javascript:" +
             "|<\\s*img[^>]*onerror|<\\s*svg[^>]*onload|<\\s*iframe)");
 
+    // ── DDoS: IP별 슬라이딩 윈도우 요청 카운터 ──
+    private static final long WINDOW_MS  = 10_000L;   // 10초 창
+    private static final int  RATE_LIMIT = 30;        // 창 내 허용 요청 수
+    private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
+
+    /** IP의 최근 WINDOW_MS 내 요청 수(현재 요청 포함) 반환. */
+    private int rateHit(String ip) {
+        long now = System.currentTimeMillis();
+        Deque<Long> dq = hits.computeIfAbsent(ip, k -> new ArrayDeque<>());
+        synchronized (dq) {
+            dq.addLast(now);
+            while (!dq.isEmpty() && now - dq.peekFirst() > WINDOW_MS) dq.pollFirst();
+            return dq.size();
+        }
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
-        if (!registry.isEnabled(DefenseRegistry.DETECTION)) { chain.doFilter(req, res); return; }
-
         String uri = req.getRequestURI();
+
+        // ── DDoS: 제어플레인(/air/) 제외한 API 요청을 IP별로 카운트 (탐지 플래그와 무관하게 가드 적용) ──
+        if (uri.startsWith("/api/v1/") && !uri.startsWith("/api/v1/air/")) {
+            int count = rateHit(clientIp(req));
+            if (count > RATE_LIMIT) {
+                if (registry.isEnabled(DefenseRegistry.DETECTION)
+                        && !registry.isEnabled(DefenseRegistry.DDOS_RATE_GUARD))
+                    incidentService.report("DDOS_FLOOD", uri, clientIp(req), null,
+                            "rate=" + count + " in " + (WINDOW_MS / 1000) + "s");
+                if (registry.isEnabled(DefenseRegistry.DDOS_RATE_GUARD)) {
+                    res.setStatus(429);
+                    res.setContentType("application/json;charset=UTF-8");
+                    res.getWriter().write(
+                        "{\"success\":false,\"code\":\"RATE_LIMITED\",\"message\":\"요청이 너무 많습니다.\"}");
+                    return;
+                }
+            }
+        }
+
+        if (!registry.isEnabled(DefenseRegistry.DETECTION)) { chain.doFilter(req, res); return; }
 
         // ── SQL Injection: 상품 검색 q 파라미터 시그니처 검사 (GET, 본문 없음) ──
         if ("GET".equalsIgnoreCase(req.getMethod()) && PRODUCT_SEARCH.matcher(uri).matches()) {

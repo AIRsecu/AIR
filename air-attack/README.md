@@ -118,6 +118,30 @@ python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> idor
 # → 🟢 DEFENDED — 소유자 검증으로 403
 ```
 
+## 시나리오 5 — DDoS (요청 폭주 / rate flood)
+
+취약 표면: 레이트리밋 부재. `DetectionFilter` 가 IP별 슬라이딩 윈도우(10초)로 카운트.
+- `ddos.rate-guard` **OFF** → 무제한 허용(폭주 성공)
+- `ddos.rate-guard` **ON**  → 창 내 30건 초과 시 HTTP 429
+- 탐지: 창 내 30건 초과 시 `DDOS_FLOOD` 보고 → `ddos.rate-guard` 즉시 ON.
+- 대상: `/api/v1/**` (제어플레인 `/api/v1/air/**` 제외). attack 은 `/api/v1/health` 폭주.
+
+```bash
+# 취약 시연 (탐지 OFF + 가드 OFF)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/disable  -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/ddos.rate-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ddos
+# → 🔴 VULNERABLE — 60건 전부 200
+
+# 자율 방어 시연 (탐지 ON + 가드 리셋) — 직전 창이 비도록 ~10초 후 실행
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/enable   -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/ddos.rate-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ddos
+# → 🟢 DEFENDED — 임계 초과분 429 차단
+```
+> ⚠️ `ddos.rate-guard` ON 은 모든 엔드포인트에 적용(IP당 30건/10초). 다른 시나리오
+> 테스트 전엔 `ddos.rate-guard/disable` 로 꺼두는 게 안전.
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 
