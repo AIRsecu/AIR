@@ -5,6 +5,7 @@ import com.shop.domain.User;
 import com.shop.dto.ApiResponse;
 import com.shop.dto.charge.CreateChargeRequest;
 import com.shop.service.ChargeRequestService;
+import com.shop.service.NotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class ChargeRequestController {
 
     private final ChargeRequestService service;
+    private final NotificationService notificationService;
 
     /** customer - 충전 요청 제출 */
     @PostMapping
@@ -29,6 +31,7 @@ public class ChargeRequestController {
             @Valid @RequestBody CreateChargeRequest req,
             @AuthenticationPrincipal User actor) {
         ChargeRequest r = service.submit(tenantId, actor, req.amount());
+        notificationService.notifyTenantActivity(tenantId);   // 새 충전요청 → 관리자 실시간 알림
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(r));
     }
 
@@ -53,7 +56,9 @@ public class ChargeRequestController {
     public ResponseEntity<ApiResponse<Void>> approve(
             @PathVariable String tenantId, @PathVariable String id,
             @AuthenticationPrincipal User actor) {
-        service.approve(tenantId, id, actor);
+        ChargeRequest r = service.approve(tenantId, id, actor);
+        notificationService.notifyTenantActivity(tenantId);                       // 대기집계 갱신
+        notificationService.notifyCharge(r.getUserId(), r.getId(), "approved");   // 고객 실시간 알림
         return ResponseEntity.ok(ApiResponse.ok());
     }
 
@@ -64,7 +69,9 @@ public class ChargeRequestController {
             @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal User actor) {
         String reason = body != null ? body.get("reason") : null;
-        service.reject(tenantId, id, reason, actor);
+        ChargeRequest r = service.reject(tenantId, id, reason, actor);
+        notificationService.notifyTenantActivity(tenantId);                       // 대기집계 갱신
+        notificationService.notifyCharge(r.getUserId(), r.getId(), "rejected");   // 고객 실시간 알림
         return ResponseEntity.ok(ApiResponse.ok());
     }
 }

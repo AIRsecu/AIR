@@ -52,21 +52,23 @@ public class ChargeRequestService {
                 : reqMapper.findByTenantAndStatus(tenantId, status);
     }
 
-    /** admin/super_admin - 승인 → 잔액 증가 */
+    /** admin/super_admin - 승인 → 잔액 증가. 처리된 요청 반환(알림용). */
     @Transactional
-    public void approve(String tenantId, String requestId, User actor) {
+    public ChargeRequest approve(String tenantId, String requestId, User actor) {
         authorize(tenantId, actor);
         ChargeRequest req = loadPending(tenantId, requestId);
         userMapper.addBalance(req.getUserId(), req.getAmount());
         reqMapper.updateStatus(requestId, ChargeRequest.Status.approved.name(), actor.getId(), null);
+        return req;
     }
 
-    /** admin/super_admin - 반려 (잔액 변동 없음) */
+    /** admin/super_admin - 반려 (잔액 변동 없음). 처리된 요청 반환(알림용). */
     @Transactional
-    public void reject(String tenantId, String requestId, String reason, User actor) {
+    public ChargeRequest reject(String tenantId, String requestId, String reason, User actor) {
         authorize(tenantId, actor);
-        loadPending(tenantId, requestId);
+        ChargeRequest req = loadPending(tenantId, requestId);
         reqMapper.updateStatus(requestId, ChargeRequest.Status.rejected.name(), actor.getId(), reason);
+        return req;
     }
 
     // ── 내부 ────────────────────────────────────────────────

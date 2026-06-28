@@ -4,6 +4,7 @@ import com.shop.domain.SignupRequest;
 import com.shop.domain.User;
 import com.shop.dto.ApiResponse;
 import com.shop.dto.signup.CreateSignupRequest;
+import com.shop.service.NotificationService;
 import com.shop.service.SignupRequestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class SignupRequestController {
 
     private final SignupRequestService service;
+    private final NotificationService notificationService;
 
     /** 공개 - 회원가입 요청 제출 */
     @PostMapping
@@ -28,6 +30,7 @@ public class SignupRequestController {
             @PathVariable String tenantId,
             @Valid @RequestBody CreateSignupRequest req) {
         SignupRequest r = service.submit(tenantId, req.username(), req.password(), req.displayName());
+        notificationService.notifyTenantActivity(tenantId);   // 새 가입요청 → 관리자 실시간 알림
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(r));
     }
 
@@ -46,7 +49,9 @@ public class SignupRequestController {
             @PathVariable String tenantId,
             @PathVariable String id,
             @AuthenticationPrincipal User actor) {
-        return ResponseEntity.ok(ApiResponse.ok(service.approve(tenantId, id, actor)));
+        User created = service.approve(tenantId, id, actor);
+        notificationService.notifyTenantActivity(tenantId);   // 대기집계 갱신
+        return ResponseEntity.ok(ApiResponse.ok(created));
     }
 
     /** admin/super_admin - 반려 */
@@ -58,6 +63,7 @@ public class SignupRequestController {
             @AuthenticationPrincipal User actor) {
         String reason = body != null ? body.get("reason") : null;
         service.reject(tenantId, id, reason, actor);
+        notificationService.notifyTenantActivity(tenantId);   // 대기집계 갱신
         return ResponseEntity.ok(ApiResponse.ok());
     }
 }

@@ -194,5 +194,8 @@ const API = (() => {
 
     // notifications (가입+충전 대기 집계)
     pendingNotifications: ()       => request('GET', '/notifications/pending-signups'),
+
+    // 실시간 알림 스트림(SSE) URL. EventSource 는 헤더를 못 보내므로 토큰을 쿼리로 전달.
+    streamUrl: ()                  => apiUrl('/notifications/stream') + '?token=' + encodeURIComponent(getAccess() || ''),
   };
 })();
