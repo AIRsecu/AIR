@@ -27,7 +27,8 @@ public class IncidentService {
             "SQLI_ATTEMPT",       DefenseRegistry.SQL_INJECTION_GUARD,
             "XSS_ATTEMPT",        DefenseRegistry.XSS_INPUT_GUARD,
             "IDOR_ATTEMPT",       DefenseRegistry.AUTHZ_IDOR_GUARD,
-            "DDOS_FLOOD",         DefenseRegistry.DDOS_RATE_GUARD
+            "DDOS_FLOOD",         DefenseRegistry.DDOS_RATE_GUARD,
+            "RANSOM_MASSDELETE",  DefenseRegistry.RANSOM_MASSDELETE_GUARD
     );
 
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {

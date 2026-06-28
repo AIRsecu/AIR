@@ -142,6 +142,29 @@ python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ddos
 > ⚠️ `ddos.rate-guard` ON 은 모든 엔드포인트에 적용(IP당 30건/10초). 다른 시나리오
 > 테스트 전엔 `ddos.rate-guard/disable` 로 꺼두는 게 안전.
 
+## 시나리오 6 — Ransomware-유사 (대량 삭제 / mass-delete)
+
+취약 표면: 파괴적 작업(DELETE) 빈도 제한 부재. `DetectionFilter` 가 IP별 DELETE 횟수를
+10초 창으로 카운트.
+- `ransom.massdelete-guard` **OFF** → 무제한 삭제(대량 파괴 성공)
+- `ransom.massdelete-guard` **ON**  → 창 내 5건 초과 DELETE 시 HTTP 429
+- 탐지: 창 내 5건 초과 시 `RANSOM_MASSDELETE` 보고 → guard 즉시 ON.
+- 모델링 근거: 무상태 API 에서 랜섬웨어 = "단시간 대량 파괴/변조" 이상행위로 본다.
+
+```bash
+# 취약 시연 (탐지 OFF + 가드 OFF)  — ddos.rate-guard 는 OFF 여야 간섭 없음
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/disable          -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/ransom.massdelete-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ransom
+# → 🔴 VULNERABLE — 10건 전부 삭제
+
+# 자율 방어 시연 (탐지 ON + 가드 리셋) — 직전 창이 비도록 ~10초 후 실행
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/enable           -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/ransom.massdelete-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> ransom
+# → 🟢 DEFENDED — 5건 삭제 후 초과분 429 차단
+```
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 

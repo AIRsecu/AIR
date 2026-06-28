@@ -29,14 +29,16 @@ public class DefenseRegistry {
     public static final String XSS_INPUT_GUARD     = "xss.input-guard";     // 기본 OFF=취약(원문 저장)
     public static final String AUTHZ_IDOR_GUARD    = "authz.idor-guard";    // 기본 OFF=취약(소유자 검증 생략)
     public static final String DDOS_RATE_GUARD     = "ddos.rate-guard";     // 기본 OFF=취약(레이트리밋 없음)
+    public static final String RANSOM_MASSDELETE_GUARD = "ransom.massdelete-guard"; // 기본 OFF=취약(대량삭제 무제한)
     public static final String DETECTION           = "air.detection";       // 기본 ON=탐지활성
     private static final Map<String, Boolean> KNOWN_DEFAULTS = Map.of(
-            ORDER_QTY_GUARD,     false,
-            SQL_INJECTION_GUARD, false,
-            XSS_INPUT_GUARD,     false,
-            AUTHZ_IDOR_GUARD,    false,
-            DDOS_RATE_GUARD,     false,
-            DETECTION,           true
+            ORDER_QTY_GUARD,         false,
+            SQL_INJECTION_GUARD,     false,
+            XSS_INPUT_GUARD,         false,
+            AUTHZ_IDOR_GUARD,        false,
+            DDOS_RATE_GUARD,         false,
+            RANSOM_MASSDELETE_GUARD, false,
+            DETECTION,               true
     );
 
     private final DefenseFlagMapper mapper;

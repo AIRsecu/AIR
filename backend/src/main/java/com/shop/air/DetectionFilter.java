@@ -59,15 +59,17 @@ public class DetectionFilter extends OncePerRequestFilter {
             "(?i)(<\\s*script|<\\s*/\\s*script|onerror\\s*=|onload\\s*=|javascript:" +
             "|<\\s*img[^>]*onerror|<\\s*svg[^>]*onload|<\\s*iframe)");
 
-    // ── DDoS: IP별 슬라이딩 윈도우 요청 카운터 ──
-    private static final long WINDOW_MS  = 10_000L;   // 10초 창
-    private static final int  RATE_LIMIT = 30;        // 창 내 허용 요청 수
-    private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
+    // ── IP별 슬라이딩 윈도우 카운터 (DDoS 전체요청 / 랜섬 DELETE) ──
+    private static final long WINDOW_MS        = 10_000L;   // 10초 창
+    private static final int  RATE_LIMIT       = 30;        // 창 내 허용 요청 수 (DDoS)
+    private static final int  MASSDELETE_LIMIT = 5;         // 창 내 허용 DELETE 수 (랜섬)
+    private final Map<String, Deque<Long>> hits    = new ConcurrentHashMap<>();  // 전체 요청
+    private final Map<String, Deque<Long>> deletes = new ConcurrentHashMap<>();  // DELETE 만
 
-    /** IP의 최근 WINDOW_MS 내 요청 수(현재 요청 포함) 반환. */
-    private int rateHit(String ip) {
+    /** store 기준 IP의 최근 WINDOW_MS 내 횟수(현재 포함) 반환. */
+    private int hit(Map<String, Deque<Long>> store, String ip) {
         long now = System.currentTimeMillis();
-        Deque<Long> dq = hits.computeIfAbsent(ip, k -> new ArrayDeque<>());
+        Deque<Long> dq = store.computeIfAbsent(ip, k -> new ArrayDeque<>());
         synchronized (dq) {
             dq.addLast(now);
             while (!dq.isEmpty() && now - dq.peekFirst() > WINDOW_MS) dq.pollFirst();
@@ -81,9 +83,11 @@ public class DetectionFilter extends OncePerRequestFilter {
 
         String uri = req.getRequestURI();
 
+        boolean apiReq = uri.startsWith("/api/v1/") && !uri.startsWith("/api/v1/air/");
+
         // ── DDoS: 제어플레인(/air/) 제외한 API 요청을 IP별로 카운트 (탐지 플래그와 무관하게 가드 적용) ──
-        if (uri.startsWith("/api/v1/") && !uri.startsWith("/api/v1/air/")) {
-            int count = rateHit(clientIp(req));
+        if (apiReq) {
+            int count = hit(hits, clientIp(req));
             if (count > RATE_LIMIT) {
                 if (registry.isEnabled(DefenseRegistry.DETECTION)
                         && !registry.isEnabled(DefenseRegistry.DDOS_RATE_GUARD))
@@ -94,6 +98,24 @@ public class DetectionFilter extends OncePerRequestFilter {
                     res.setContentType("application/json;charset=UTF-8");
                     res.getWriter().write(
                         "{\"success\":false,\"code\":\"RATE_LIMITED\",\"message\":\"요청이 너무 많습니다.\"}");
+                    return;
+                }
+            }
+        }
+
+        // ── 랜섬(유사): DELETE 빈도 폭주(대량 파괴) 탐지 → 차단 ──
+        if (apiReq && "DELETE".equalsIgnoreCase(req.getMethod())) {
+            int dcount = hit(deletes, clientIp(req));
+            if (dcount > MASSDELETE_LIMIT) {
+                if (registry.isEnabled(DefenseRegistry.DETECTION)
+                        && !registry.isEnabled(DefenseRegistry.RANSOM_MASSDELETE_GUARD))
+                    incidentService.report("RANSOM_MASSDELETE", uri, clientIp(req), null,
+                            "deletes=" + dcount + " in " + (WINDOW_MS / 1000) + "s");
+                if (registry.isEnabled(DefenseRegistry.RANSOM_MASSDELETE_GUARD)) {
+                    res.setStatus(429);
+                    res.setContentType("application/json;charset=UTF-8");
+                    res.getWriter().write(
+                        "{\"success\":false,\"code\":\"MASS_DELETE_BLOCKED\",\"message\":\"비정상 대량 삭제가 차단되었습니다.\"}");
                     return;
                 }
             }
