@@ -29,10 +29,18 @@ JWT_REFRESH_SECRET=$(openssl rand -base64 48)
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=LabAdmin!234
 EOF
-# (선택) LLM 패치 사용 시
-export ANTHROPIC_API_KEY=sk-ant-...
+# (선택) LLM 사용 — 멀티 공급자(무료 옵션). 키 하나만 있으면 자동 감지.
+#   무료: Gemini  → https://aistudio.google.com (Get API key, 결제 불필요)
+export GEMINI_API_KEY=...                 # 선택 GEMINI_MODEL=gemini-2.0-flash
+#   무료: Groq    → https://console.groq.com
+# export GROQ_API_KEY=...                 # 선택 GROQ_MODEL=llama-3.3-70b-versatile
+#   유료: Anthropic(크레딧 필요)
+# export ANTHROPIC_API_KEY=sk-ant-...
+#   공급자 강제 지정(미설정 시 키 존재로 자동 감지):
+# export AIR_LLM_PROVIDER=gemini|groq|anthropic
 # (선택) 자동 PR push 사용 시 git 인증 구성(토큰)
 ```
+> 키가 하나도 없으면 LLM 호출은 None 폴백 — 소스패치는 템플릿, 이상분류는 일반 shield 유지로 안전.
 
 ## 폐루프 데모 (lab=8081 가 떠 있는 상태)
 ```bash
@@ -65,8 +73,8 @@ LLM이 분류하고 **런타임 동적 차단 룰을 자동 설치**한 뒤 광�
 ```
 소스패치(5단계)와 달리 **git repo 불필요**(런타임 룰만 설치). 따라서 `--repo` 생략 가능.
 ```bash
-# 0) ANTHROPIC_API_KEY 필수 (없으면 분류 생략 → 일반 shield 유지)
-export ANTHROPIC_API_KEY=sk-ant-...
+# 0) LLM 키 1개 필요 — 무료 권장(Gemini/Groq). 없으면 분류 생략 → 일반 shield 유지
+export GEMINI_API_KEY=...        # 또는 GROQ_API_KEY / ANTHROPIC_API_KEY
 
 # 1) 미지 공격 → 이상탐지로 shield + UNKNOWN_ANOMALY 인시던트 생성
 python3 ~/air-lab/air-attack/attack.py --base http://localhost:8081 \
