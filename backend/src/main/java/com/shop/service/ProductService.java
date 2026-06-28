@@ -56,11 +56,11 @@ public class ProductService {
         Product product = Product.builder()
                 .id(UlidUtil.generate())
                 .tenantId(tenantId)
-                .name(req.name())
-                .description(req.description())
+                .name(xssGuard(req.name()))
+                .description(xssGuard(req.description()))
                 .price(req.price())
                 .stock(req.stock())
-                .category(req.category())
+                .category(xssGuard(req.category()))
                 .imageUrl(req.imageUrl())
                 .isActive(true)
                 .build();
@@ -77,11 +77,11 @@ public class ProductService {
         Product updated = Product.builder()
                 .id(existing.getId())
                 .tenantId(existing.getTenantId())
-                .name(req.name() != null ? req.name() : existing.getName())
-                .description(req.description() != null ? req.description() : existing.getDescription())
+                .name(req.name() != null ? xssGuard(req.name()) : existing.getName())
+                .description(req.description() != null ? xssGuard(req.description()) : existing.getDescription())
                 .price(req.price() != null ? req.price() : existing.getPrice())
                 .stock(req.stock() != null ? req.stock() : existing.getStock())
-                .category(req.category() != null ? req.category() : existing.getCategory())
+                .category(req.category() != null ? xssGuard(req.category()) : existing.getCategory())
                 .imageUrl(req.imageUrl() != null ? req.imageUrl() : existing.getImageUrl())
                 .isActive(req.isActive() != null ? req.isActive() : existing.isActive())
                 .build();
@@ -100,5 +100,18 @@ public class ProductService {
     private void assertAdminOf(User actor, String tenantId) {
         if (!actor.canManage(tenantId))
             throw AppException.forbidden("해당 테넌트의 관리자만 가능합니다.");
+    }
+
+    /**
+     * [AIR] xss.input-guard ON 이면 저장 입력의 위험 문자(&lt;,&gt;,&amp;,",')를
+     * HTML 이스케이프해 스크립트 실행을 무력화. OFF 면 원문 저장(저장형 XSS 취약).
+     */
+    private String xssGuard(String s) {
+        if (s == null || !defense.isEnabled(DefenseRegistry.XSS_INPUT_GUARD)) return s;
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }

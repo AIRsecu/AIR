@@ -40,11 +40,20 @@ public class DetectionFilter extends OncePerRequestFilter {
     private static final Pattern PRODUCT_SEARCH =
             Pattern.compile("^/api/v1/tenants/[^/]+/products/search/?$");
 
+    // POST/PATCH /api/v1/tenants/{tid}/products[/{id}]  (상품 생성/수정)
+    private static final Pattern PRODUCT_WRITE =
+            Pattern.compile("^/api/v1/tenants/[^/]+/products(/[^/]+)?/?$");
+
     // SQL Injection 시그니처(대소문자 무시): UNION SELECT / OR 1=1 / 주석 / 세미콜론 / DROP 등
     private static final Pattern SQLI_SIGNATURE = Pattern.compile(
             "(?i)(\\bunion\\b\\s+\\bselect\\b" +
             "|\\bor\\b\\s+['\"]?\\d+['\"]?\\s*=\\s*['\"]?\\d+" +
             "|';|--|/\\*|\\bdrop\\b\\s+\\btable\\b|\\bselect\\b.+\\bfrom\\b)");
+
+    // XSS 시그니처(대소문자 무시): script/이벤트핸들러/javascript:/위험 태그
+    private static final Pattern XSS_SIGNATURE = Pattern.compile(
+            "(?i)(<\\s*script|<\\s*/\\s*script|onerror\\s*=|onload\\s*=|javascript:" +
+            "|<\\s*img[^>]*onerror|<\\s*svg[^>]*onload|<\\s*iframe)");
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
@@ -74,6 +83,21 @@ public class DetectionFilter extends OncePerRequestFilter {
                 detectNegativeQty(cached);
             } catch (Exception e) {
                 log.debug("[AIR] 탐지 파싱 스킵: {}", e.getMessage());
+            }
+            chain.doFilter(cached, res);
+            return;
+        }
+
+        // ── XSS: 상품 생성/수정 본문 검사 (POST/PATCH) ──
+        if (("POST".equalsIgnoreCase(req.getMethod()) || "PATCH".equalsIgnoreCase(req.getMethod()))
+                && PRODUCT_WRITE.matcher(uri).matches()) {
+            CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
+            try {
+                String body = cached.getBodyAsString();
+                if (body != null && XSS_SIGNATURE.matcher(body).find())
+                    incidentService.report("XSS_ATTEMPT", uri, clientIp(req), null, body);
+            } catch (Exception e) {
+                log.debug("[AIR] XSS 탐지 스킵: {}", e.getMessage());
             }
             chain.doFilter(cached, res);
             return;

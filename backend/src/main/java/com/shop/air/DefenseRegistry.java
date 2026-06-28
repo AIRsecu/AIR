@@ -26,10 +26,12 @@ public class DefenseRegistry {
     /** 알려진 키와 초기 기본값 */
     public static final String ORDER_QTY_GUARD     = "order.qty-guard";     // 기본 OFF=취약
     public static final String SQL_INJECTION_GUARD = "sql.injection-guard"; // 기본 OFF=취약(${} 동적쿼리)
+    public static final String XSS_INPUT_GUARD     = "xss.input-guard";     // 기본 OFF=취약(원문 저장)
     public static final String DETECTION           = "air.detection";       // 기본 ON=탐지활성
     private static final Map<String, Boolean> KNOWN_DEFAULTS = Map.of(
             ORDER_QTY_GUARD,     false,
             SQL_INJECTION_GUARD, false,
+            XSS_INPUT_GUARD,     false,
             DETECTION,           true
     );
 

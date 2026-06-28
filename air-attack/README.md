@@ -73,6 +73,28 @@ curl -s $BASE/api/v1/air/defenses -H "$AUTH"             # sql.injection-guard: 
 curl -s "$BASE/api/v1/air/incidents?limit=10" -H "$AUTH" # SQLI_ATTEMPT 기록
 ```
 
+## 시나리오 3 — Stored XSS (상품명 스크립트 저장)
+
+취약 표면: `POST/PATCH /api/v1/tenants/{tid}/products` 의 name·description·category
+- `xss.input-guard` **OFF** → 입력 원문 저장 → 응답/렌더 시 스크립트 실행(저장형 XSS)
+- `xss.input-guard` **ON**  → 위험 문자(`<`,`>`,`&`,`"`,`'`) HTML 이스케이프 → 무력화
+- 탐지: `DetectionFilter` 가 본문에서 `<script`,`onerror=`,`javascript:` 등 발견 시
+  `XSS_ATTEMPT` 보고 → `IncidentService` 가 `xss.input-guard` 즉시 ON.
+
+```bash
+# 취약 시연 (탐지 OFF)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/disable   -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/xss.input-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> xss
+# → 🔴 VULNERABLE — <script> 원문 저장
+
+# 자율 방어 시연 (탐지 ON + 방어 리셋)
+curl -s -X POST $BASE/api/v1/air/defenses/air.detection/enable    -H "$AUTH"
+curl -s -X POST $BASE/api/v1/air/defenses/xss.input-guard/disable -H "$AUTH"
+python attack.py --base $BASE --admin-user <admin> --admin-pass <pw> xss
+# → 🟢 DEFENDED — 탐지 즉시 xss.input-guard 활성화 → 이스케이프 저장
+```
+
 ## 종료코드 (검증/CI용)
 `attack.py` 는 공격 성공(취약)=**1**, 방어됨=**0** 으로 종료. 5단계 자동패치 검증에서 "패치 후 0이어야 통과"로 활용.
 

