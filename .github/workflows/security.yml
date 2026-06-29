@@ -49,7 +49,7 @@ jobs:
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report
+          name: semgrep-results
           path: reports/semgrep/semgrep.json
 
   trivy:
@@ -78,7 +78,7 @@ jobs:
       - name: Upload Trivy Results
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report
+          name: trivy-results
           path: reports/trivy/trivy.json
   
   summary:
@@ -103,13 +103,13 @@ jobs:
       - name: Download Semgrep Report
         uses: actions/download-artifact@v4
         with:
-          name: semgrep-report
+          name: semgrep-results
           path: reports/semgrep
 
       - name: Download Trivy Report
         uses: actions/download-artifact@v4
         with:
-          name: trivy-report
+          name: trivy-results
           path: reports/trivy
 
       - name: Debug Reports

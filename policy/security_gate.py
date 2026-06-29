@@ -11,10 +11,30 @@ if not SUMMARY_PATH.exists():
 with open(SUMMARY_PATH) as f:
     summary = json.load(f)
 
-critical = summary.get("trivy_critical", 0)
+semgrep_findings = summary.get("semgrep_findings", 0)
+trivy_critical = summary.get("trivy_critical", 0)
+trivy_high = summary.get("trivy_high", 0)
 
-if critical > 0:
-    print(f"Critical vulnerabilities found: {critical}")
+if trivy_critical > 0:
+    print(
+        f"Critical vulnerabilities found: "
+        f"{trivy_critical}"
+    )
+    sys.exit(1)
+
+if trivy_high >= 5:
+    print(
+        f"Too many HIGH vulnerabilities: "
+        f"{trivy_high}"
+    )
+    sys.exit(1)
+
+if semgrep_findings >= 3:
+    print(
+        f"Too many Semgrep findings: "
+        f"{semgrep_findings}"
+    )
     sys.exit(1)
 
 print("Security gate passed.")
+
