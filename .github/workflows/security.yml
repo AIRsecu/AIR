@@ -126,5 +126,9 @@ jobs:
         with:
           name: security-summary
           path: reports/summary/sec-summary.json
+
+      - name: Run Security Gate
+        run: |
+          poetry run python policy/security_gate.py
   
   
