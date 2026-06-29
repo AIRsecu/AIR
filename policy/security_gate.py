@@ -27,41 +27,43 @@ semgrep_threshold = policy.get("semgrep_findings", 3)
 zap_high_threshold = policy.get("zap_high", 1)
 zap_medium_threshold = policy.get("zap_medium", 5)
 
+failures = []
+
 if trivy_critical >= critical_threshold:
-    print(
+    failures.append(
         f"Critical vulnerabilities found: "
         f"{trivy_critical}"
     )
-    sys.exit(1)
 
 if trivy_high >= high_threshold:
-    print(
+    failures.append(
         f"Too many HIGH vulnerabilities: "
         f"{trivy_high}"
     )
-    sys.exit(1)
 
 if semgrep_findings >= semgrep_threshold:
-    print(
+    failures.append(
         f"Too many Semgrep findings: "
         f"{semgrep_findings}"
     )
-    sys.exit(1)
 
 if zap_high >= zap_high_threshold:
-    print(
+    failures.append(
         f"Too many ZAP HIGH alerts: "
         f"{zap_high}"
     )
-    sys.exit(1)
 
 if zap_medium >= zap_medium_threshold:
-    print(
+    failures.append(
         f"Too many ZAP MEDIUM alerts: "
         f"{zap_medium}"
     )
-    sys.exit(1)
 
 print(json.dumps(policy, indent=2))
+if failures:
+    print("Security gate failed:")
+    for failure in failures:
+        print(f"- {failure}")
+    sys.exit(1)
 print("Security gate passed.")
 
