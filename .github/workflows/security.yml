@@ -40,10 +40,10 @@ jobs:
             --config auto \
             . \
             --json \
-            --output reports/semgrep.json
+            --output reports/semgrep/semgrep.json
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-report
-          path: reports/semgrep.json
+          path: reports/semgrep/semgrep.json
