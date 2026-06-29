@@ -40,6 +40,17 @@ reports/
 
 ---
 
+## Generated Reports
+
+| Scanner | Output |
+|---|---|
+| Semgrep | semgrep.json |
+| Trivy | trivy.json |
+| ZAP | zap-report.json |
+| Summary | sec-summary.json |
+
+---
+
 ## Summary Generator
 
 scripts/generate_summary.py
