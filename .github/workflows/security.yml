@@ -28,7 +28,7 @@ jobs:
         run: pip install poetry
 
       - name: Install Dependencies
-        run: poetry install
+        run: poetry install --no-root
 
       - name: Install Semgrep
         run: poetry add --group dev semgrep
