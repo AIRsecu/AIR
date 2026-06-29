@@ -39,6 +39,7 @@ jobs:
           poetry run semgrep scan \
             --config auto \
             . \
+            --error \
             --json \
             --output reports/semgrep/semgrep.json
 
