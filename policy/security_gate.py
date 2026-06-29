@@ -18,10 +18,14 @@ with open(POLICY_PATH) as f:
 semgrep_findings = summary.get("semgrep_findings", 0)
 trivy_critical = summary.get("trivy_critical", 0)
 trivy_high = summary.get("trivy_high", 0)
+zap_high = summary.get("zap_high", 0)
+zap_medium = summary.get("zap_medium", 0)
 
 critical_threshold = policy.get("trivy_critical", 1)
 high_threshold = policy.get("trivy_high", 5)
 semgrep_threshold = policy.get("semgrep_findings", 3)
+zap_high_threshold = policy.get("zap_high", 1)
+zap_medium_threshold = policy.get("zap_medium", 5)
 
 if trivy_critical >= critical_threshold:
     print(
@@ -41,6 +45,20 @@ if semgrep_findings >= semgrep_threshold:
     print(
         f"Too many Semgrep findings: "
         f"{semgrep_findings}"
+    )
+    sys.exit(1)
+
+if zap_high >= zap_high_threshold:
+    print(
+        f"Too many ZAP HIGH alerts: "
+        f"{zap_high}"
+    )
+    sys.exit(1)
+
+if zap_medium >= zap_medium_threshold:
+    print(
+        f"Too many ZAP MEDIUM alerts: "
+        f"{zap_medium}"
     )
     sys.exit(1)
 

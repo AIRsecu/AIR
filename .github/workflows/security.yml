@@ -80,9 +80,42 @@ jobs:
         with:
           name: trivy-results
           path: reports/trivy/trivy.json
-  
+
+  zap:
+    needs: trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Start Application
+        run: docker compose up -d
+
+      - name: Wait for Application
+        run: sleep 20
+
+      - name: Create Report Directory
+        run: mkdir -p reports/zap
+
+      - name: Run ZAP Baseline Scan
+        run: |
+          docker run --rm \
+            --network host \
+            -v $(pwd)/reports/zap:/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://localhost:8000 \
+            -J zap-report.json
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap/zap-report.json
+
   summary:
-    needs: [semgrep, trivy]
+    needs: [semgrep, trivy, zap]
     runs-on: ubuntu-latest
 
     steps:
@@ -111,6 +144,12 @@ jobs:
         with:
           name: trivy-results
           path: reports/trivy
+          
+      - name: Download ZAP Report
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap
 
       - name: Debug Reports
         run: |
