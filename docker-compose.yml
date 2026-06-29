@@ -1,0 +1,6 @@
+services:
+  app:
+    build: .
+    container_name: devsecops-app
+    ports:
+      - "8000:8000"
