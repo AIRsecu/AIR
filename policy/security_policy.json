@@ -1,0 +1,5 @@
+{
+  "trivy_critical": 1,
+  "trivy_high": 5,
+  "semgrep_findings": 3
+}
