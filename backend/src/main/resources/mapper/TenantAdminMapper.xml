@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.TenantAdminMapper">
+
+    <insert id="insert">
+        INSERT OR IGNORE INTO tenant_admins (tenant_id, user_id, created_at)
+        VALUES (#{tenantId}, #{userId}, datetime('now'))
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM tenant_admins WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+    </delete>
+
+    <select id="findTenantIdsByUser" resultType="string">
+        SELECT tenant_id FROM tenant_admins WHERE user_id = #{userId}
+    </select>
+
+    <select id="findUserIdsByTenant" resultType="string">
+        SELECT user_id FROM tenant_admins WHERE tenant_id = #{tenantId}
+    </select>
+
+</mapper>

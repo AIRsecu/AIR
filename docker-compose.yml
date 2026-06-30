@@ -4,3 +4,63 @@ services:
     container_name: devsecops-app
     ports:
       - "8000:8000"
+
+# ── 백엔드 API ──────────────────────────────────────────────
+backend:
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  container_name: shop-backend
+  restart: unless-stopped
+  # 외부 직접 접근 차단: nginx(80)만 단일 진입점. 8080은 로컬 디버깅용 loopback 전용.
+  #  (nginx 는 docker 네트워크로 backend:8080 접근 — 호스트 포트 불필요)
+  ports:
+    - "127.0.0.1:8080:8080"
+  environment:
+    # JWT 시크릿 (운영 시 반드시 교체)
+    - SPRING_APPLICATION_NAME=multitenant-shop
+    - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-change-me-access-secret-min-32chars-padding}
+    - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-change-me-refresh-secret-min-32chars-padding}
+    - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-60}
+    - JWT_SUPER_ACCESS_TTL_HOURS=${JWT_SUPER_ACCESS_TTL_HOURS:-120}
+    - JWT_REFRESH_TTL_HOURS=${JWT_REFRESH_TTL_HOURS:-168}
+    # Bootstrap 관리자
+    - APP_BOOTSTRAP_ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+    - APP_BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme1234!}
+    # CORS
+    - APP_CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    # SQLite DB 경로 (볼륨 마운트 경로)
+    - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/shop.db
+  volumes:
+    - shop-data:/data
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+  networks:
+    - shop-net
+
+# ── 프론트엔드 (nginx: 정적 서빙 + /api 프록시) ───────────
+frontend:
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile
+  container_name: shop-frontend
+  restart: unless-stopped
+  ports:
+    - "80:80"
+  depends_on:
+    backend:
+      condition: service_healthy
+  networks:
+    - shop-net
+
+volumes:
+shop-data:
+  driver: local
+
+networks:
+shop-net:
+  driver: bridge

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.RefreshTokenMapper">
+
+    <resultMap id="TokenRM" type="com.shop.domain.RefreshToken">
+        <id     property="id"          column="id"/>
+        <result property="userId"      column="user_id"/>
+        <result property="tokenHash"   column="token_hash"/>
+        <result property="expiresAt"   column="expires_at"/>
+        <result property="revokedAt"   column="revoked_at"/>
+        <result property="replacedBy"  column="replaced_by"/>
+        <result property="userAgent"   column="user_agent"/>
+        <result property="createdAt"   column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.RefreshToken">
+        INSERT INTO refresh_tokens
+            (id, user_id, token_hash, expires_at, user_agent, created_at)
+        VALUES
+            (#{id}, #{userId}, #{tokenHash}, #{expiresAt}, #{userAgent}, datetime('now'))
+    </insert>
+
+    <select id="findByTokenHash" resultMap="TokenRM">
+        SELECT * FROM refresh_tokens WHERE token_hash = #{tokenHash}
+    </select>
+
+    <update id="revoke">
+        UPDATE refresh_tokens SET
+            revoked_at  = datetime('now'),
+            replaced_by = #{replacedBy}
+        WHERE id = #{id}
+    </update>
+
+    <update id="revokeAllByUserId">
+        UPDATE refresh_tokens SET revoked_at = datetime('now')
+        WHERE user_id = #{userId} AND revoked_at IS NULL
+    </update>
+
+</mapper>
