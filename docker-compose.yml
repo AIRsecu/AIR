@@ -62,5 +62,5 @@ shop-data:
   driver: local
 
 networks:
-shop-net:
-  driver: bridge
+  shop-net:
+    driver: bridge
