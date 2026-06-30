@@ -1,0 +1,7 @@
+{
+  "semgrep_findings": 0,
+  "trivy_critical": 2,
+  "trivy_high": 12,
+  "zap_high": 0,
+  "zap_medium": 3
+}

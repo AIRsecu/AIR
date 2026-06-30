@@ -53,6 +53,10 @@ jobs:
           name: semgrep-results
           path: reports/semgrep/semgrep.json
 
+      - name: Run Semgrep
+        run: semgrep ci
+        continue-on-error: true
+
       - name: Debug Semgrep Report
         run: |
           ls -R reports
@@ -80,6 +84,10 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
+      - name: Run trivy
+          run: trivy ci
+          continue-on-error: true
+      
       - name: Upload Trivy Results
         uses: actions/upload-artifact@v4
         with:
@@ -122,6 +130,10 @@ jobs:
         with:
           name: zap-report
           path: reports/zap/zap-report.json
+      
+      - name: Run zap
+          run: zap ci
+          continue-on-error: true
 
       - name: Debug ZAP Report
         run: |
