@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.shop.mapper.TenantMapper">
+
+    <resultMap id="TenantRM" type="com.shop.domain.Tenant">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="slug"        column="slug"/>
+        <result property="domain"      column="domain"/>
+        <result property="ownerId"     column="owner_id"/>
+        <result property="description" column="description"/>
+        <result property="logoUrl"     column="logo_url"/>
+        <result property="isActive"    column="is_active"/>
+        <result property="createdAt"   column="created_at"/>
+        <result property="updatedAt"   column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.shop.domain.Tenant">
+        INSERT INTO tenants
+            (id, name, slug, domain, owner_id, description, logo_url, is_active, created_at, updated_at)
+        VALUES
+            (#{id}, #{name}, #{slug}, #{domain}, #{ownerId}, #{description}, #{logoUrl},
+             #{isActive}, datetime('now'), datetime('now'))
+    </insert>
+
+    <select id="findById" resultMap="TenantRM">
+        SELECT * FROM tenants WHERE id = #{id} AND deleted_at IS NULL
+    </select>
+
+    <select id="findBySlug" resultMap="TenantRM">
+        SELECT * FROM tenants WHERE slug = #{slug} AND deleted_at IS NULL
+    </select>
+
+    <select id="findAll" resultMap="TenantRM">
+        SELECT * FROM tenants WHERE deleted_at IS NULL ORDER BY created_at DESC
+    </select>
+
+    <select id="findAllActive" resultMap="TenantRM">
+        SELECT * FROM tenants WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name
+    </select>
+
+    <update id="update" parameterType="com.shop.domain.Tenant">
+        UPDATE tenants SET
+            name        = #{name},
+            slug        = #{slug},
+            domain      = #{domain},
+            description = #{description},
+            logo_url    = #{logoUrl},
+            is_active   = #{isActive},
+            updated_at  = datetime('now')
+        WHERE id = #{id}
+    </update>
+
+    <select id="countBySlugExcluding" resultType="int">
+        SELECT COUNT(*) FROM tenants
+        WHERE slug = #{slug} AND id != #{excludeId} AND deleted_at IS NULL
+    </select>
+
+    <update id="softDelete">
+        UPDATE tenants SET deleted_at = datetime('now') WHERE id = #{id}
+    </update>
+
+    <select id="countBySlug" resultType="int">
+        SELECT COUNT(*) FROM tenants WHERE slug = #{slug} AND deleted_at IS NULL
+    </select>
+
+</mapper>
