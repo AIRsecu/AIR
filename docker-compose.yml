@@ -4,6 +4,8 @@ services:
     container_name: devsecops-app
     ports:
       - "8000:8000"
+    networks:
+      - shop-net
 
 # ── 백엔드 API ──────────────────────────────────────────────
 backend:
