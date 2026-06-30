@@ -5,65 +5,64 @@ from pathlib import Path
 SUMMARY_PATH = Path("reports/summary/sec-summary.json")
 POLICY_PATH = Path("policy/security_policy.json")
 
-if not SUMMARY_PATH.exists():
-    print("Summary report not found.")
-    sys.exit(1)
+CHECKS = [
+    ("trivy_critical", "Critical vulnerabilities found"),
+    ("trivy_high", "Too many HIGH vulnerabilities"),
+    ("semgrep_findings", "Too many Semgrep findings"),
+    ("zap_high", "Too many ZAP HIGH alerts"),
+    ("zap_medium", "Too many ZAP MEDIUM alerts"),
+]
 
-with open(SUMMARY_PATH) as f:
-    summary = json.load(f)
 
-with open(POLICY_PATH) as f:
-    policy = json.load(f)
+def load_json(path: Path, label: str) -> dict:
+    if not path.exists():
+        print(f"{label} not found: {path}")
+        sys.exit(1)
 
-semgrep_findings = summary.get("semgrep_findings", 0)
-trivy_critical = summary.get("trivy_critical", 0)
-trivy_high = summary.get("trivy_high", 0)
-zap_high = summary.get("zap_high", 0)
-zap_medium = summary.get("zap_medium", 0)
+    try:
+        with path.open(encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"{label} is not valid JSON: {path} ({e})")
+        sys.exit(1)
 
-critical_threshold = policy.get("trivy_critical", 1)
-high_threshold = policy.get("trivy_high", 5)
-semgrep_threshold = policy.get("semgrep_findings", 3)
-zap_high_threshold = policy.get("zap_high", 1)
-zap_medium_threshold = policy.get("zap_medium", 5)
+def read_count(data: dict, key: str, default: int = 0) -> int:
+    value = data.get(key, default)
 
-failures = []
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        print(f"Invalid numeric value for '{key}': {value!r}")
+        sys.exit(1)
 
-if trivy_critical >= critical_threshold:
-    failures.append(
-        f"Critical vulnerabilities found: "
-        f"{trivy_critical}"
-    )
+def main() -> int:
+    summary = load_json(SUMMARY_PATH, "Summary report")
+    policy = load_json(POLICY_PATH, "Security policy")
+    failures = []
 
-if trivy_high >= high_threshold:
-    failures.append(
-        f"Too many HIGH vulnerabilities: "
-        f"{trivy_high}"
-    )
+    print("Security gate results:")
 
-if semgrep_findings >= semgrep_threshold:
-    failures.append(
-        f"Too many Semgrep findings: "
-        f"{semgrep_findings}"
-    )
+    for key, message in CHECKS:
+        actual = read_count(summary, key, 0)
+        threshold = read_count(policy, key)
 
-if zap_high >= zap_high_threshold:
-    failures.append(
-        f"Too many ZAP HIGH alerts: "
-        f"{zap_high}"
-    )
+        status = "FAIL" if actual >= threshold else "PASS"
+        print(f"- {key}: {actual} / threshold {threshold} [{status}]")
 
-if zap_medium >= zap_medium_threshold:
-    failures.append(
-        f"Too many ZAP MEDIUM alerts: "
-        f"{zap_medium}"
-    )
+        if actual >= threshold:
+            failures.append(
+                f"{message}: {actual} (threshold: {threshold})"
+            )
 
-print(json.dumps(policy, indent=2))
-if failures:
-    print("Security gate failed:")
-    for failure in failures:
-        print(f"- {failure}")
-    sys.exit(1)
-print("Security gate passed.")
+    if failures:
+        print("Security gate failed:")
+        for failure in failures:
+            print(f"- {failure}")
+        return 1
 
+    print("Security gate passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

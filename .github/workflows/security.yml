@@ -29,7 +29,6 @@ jobs:
         run: |
           pip install poetry
           poetry install --no-root
-          poetry add --group dev semgrep
 
       - name: Create Report Directory
         run: mkdir -p reports/semgrep
@@ -80,7 +79,11 @@ jobs:
   # 3. DAST 스캔 (병렬 실행)
   zap:
     runs-on: ubuntu-latest
-
+    env:
+      JWT_ACCESS_SECRET: ci-access-secret-32chars-minimum-padding-1234567890
+      JWT_REFRESH_SECRET: ci-refresh-secret-32chars-minimum-padding-1234567890
+      ADMIN_PASSWORD: ci-admin-password-1234!
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -89,8 +92,17 @@ jobs:
         run: docker compose up -d
 
       - name: Wait for Application
-        run: sleep 20
-
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs
+          exit 1
+      
       - name: Create Report Directory
         run: mkdir -p reports/zap
 
@@ -101,7 +113,7 @@ jobs:
             -v $(pwd)/reports/zap:/zap/wrk \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
-            -t http://host.docker.internal:8000 \
+            -t http://host.docker.internal \
             -r zap-report.html \
             -J zap-report.json || true
 
@@ -179,20 +191,4 @@ jobs:
       # 여기서 최종적으로 합격/불합격 판정 후 exit 1 또는 exit 0을 반환
       - name: Run Security Gate
         continue-on-error: ${{ github.ref != 'refs/heads/main' }}
-        run: |
-          echo "Checking security thresholds..."
-
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "Critical vulnerabilities found: $CRITICAL"
-            exit 1
-          fi
-
-          if [ "$HIGH" -gt 30 ]; then
-            echo "Too many HIGH vulnerabilities: $HIGH"
-            exit 1
-          fi
-
-          if [ "$SEMGREP" -gt 100 ]; then
-            echo "Too many Semgrep findings: $SEMGREP"
-            exit 1
-          fi
+        run: poetry run python policy/security_gate.py
