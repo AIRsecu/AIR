@@ -1,8 +1,11 @@
-# AIR — 멀티테넌트 쇼핑몰 DevSecOps 테스트베드 (Web)
+# AIR — 자율방어 vuln-lab (`feature/air-defense`)
 
-> **AIR (Automated Incident Response)** — 실시간 위협 대응 DevSecOps 보안운영 자동화를 목표로 하는 팀 프로젝트.
-> 본 모듈(`feature/web`)은 멀티테넌트 이커머스 위에 인증·인가, 지갑/정산, 요청 승인 워크플로우, 인앱 알림을
-> 구현한 **테스트베드 웹 애플리케이션**입니다 (Spring Boot API + 빌드리스 정적 SPA).
+> **AIR (Automated Incident Response)** — 실시간 위협 대응 DevSecOps 자동화 팀 프로젝트.
+> 본 브랜치(`feature/air-defense`)는 [`feature/web`](../../tree/feature/web)의 취약 앱에
+> **자율방어(AIR)** 를 얹은 적용본입니다. 공격을 스스로
+> **탐지 → 즉시 차단 → 인시던트 기록 → 위험도 산정 → Discord 경고 → (자동 소스패치)** 로 대응합니다.
+
+> ⚠️ 의도적 취약점을 포함한 **vuln-lab**. 격리 스택(`:8081`)에서 신뢰 IP 로만 구동하세요.
 
 ---
 
@@ -10,99 +13,89 @@
 
 | 영역 | 내용 |
 |---|---|
-| Backend | Java 21, Spring Boot 3.3.5, Spring Security + JJWT(HS512), MyBatis 3, SQLite |
-| Frontend | 순수 HTML/CSS/JS (빌드 도구 없음), 해시 라우팅 SPA |
-| Infra | Docker 멀티스테이지, docker-compose, nginx(정적 서빙 + `/api` 리버스 프록시) |
-| 배포 | AWS EC2 (Amazon Linux 2023) |
+| Backend | Java 21, Spring Boot 3.3.5, Spring Security + JJWT, MyBatis 3, SQLite |
+| AIR 방어 | `com.shop.air` (DetectionFilter · DefenseRegistry · IncidentService · DynamicRuleRegistry) |
+| 오케스트레이터 | `air-orchestrator/` (Python: responder.py · knowledge.py · verify.sh) — 자동 소스패치 |
+| Frontend | 순수 HTML/CSS/JS SPA (+ 🛡 **AIR IR 대시보드**) |
+| Infra | Docker, docker-compose(`-p airlab`), nginx `:8081` |
 
-## 아키텍처
+## 자율방어 구조 (플래그 토글)
 
-```
-[Browser] ──http──> [nginx :80] ──/────────> 정적 SPA (index.html, js, css)
-                          └──/api/──proxy──> [Spring Boot :8080] ──> SQLite (volume)
-```
-- 단일 출처(nginx)로 프론트와 API를 함께 제공 → CORS/혼합콘텐츠 없음
-- 인증: JWT Access(15분) + Refresh(회전·재사용 감지), 비밀번호 BCrypt
+- 취약 코드와 방어 가드가 **한 코드베이스에 공존**. `DefenseRegistry` 플래그로 전환(**기본 OFF = 취약**).
+- 공격 탐지 시 AIR 가 해당 플래그를 **즉시 ON** → 같은 요청부터 차단(자율방어 폐루프).
+- DB 영속 → 재기동 후에도 방어 상태 보존.
 
-## 역할(Role)
+## 방어 가드
 
-| 역할 | 권한 요약 |
+| 플래그 | 대응 취약점 |
 |---|---|
-| `super_admin` | 전체 테넌트/사용자 관리, 역할 변경, 관리자 배정, 감사로그, 통합 알림 |
-| `admin` | **여러 테넌트** 관리(생성/소유 + 배정), 상품·주문·가입/충전요청 처리, 접속주소(slug·도메인) 변경, 배송완료 정산 수령 |
-| `customer` | 회원가입 요청, 쇼핑/주문, 잔액 충전 요청, 보유잔액 확인, 본인 상태변경 알림 |
+| `order.qty-guard` | 음수수량 주문(잔액 증식) |
+| `sql.injection-guard` | SQL Injection (`${}` 동적쿼리) |
+| `xss.input-guard` | Stored XSS |
+| `authz.idor-guard` | IDOR (타인 주문 열람) |
+| `ddos.rate-guard` | DDoS (요청 폭주 rate-limit) |
+| `ransom.massdelete-guard` | 랜섬형 대량 삭제 |
+| `upload.file-guard` | 파일 업로드 (확장자 무검증·경로조작·LFI) |
+| `air.detection` / `anomaly.detection` | 시그니처 탐지 / 미지공격 이상탐지(4xx·5xx 버스트) |
+| `air.shield` | 이상 출처 격리(쿨다운 차단) |
 
-## 주요 기능
+## 탐지 → 대응 폐루프
 
-- **멀티테넌트**: 테넌트(상점)별 상품/주문/고객 격리, admin↔tenant **다대다** 관리
-- **인증/인가**: JWT, RBAC, refresh 토큰 회전·재사용 감지
-- **회원가입 요청 워크플로우**: 고객 셀프 신청(공개) → 관리자 승인/반려 → 계정 생성
-- **지갑/충전**: 고객 충전 요청 → 관리자 승인 시 잔액 반영
-- **구매/정산**: 주문 시 잔액 검증·차감(원자적), 취소 시 환불·재고 복원,
-  **배송완료(shipped) 시 점주(admin) 잔액 정산 입금**
-- **인앱 알림(폴링)**: 관리자에게 **주문/가입/충전** 대기 알림(벨·배지·토스트),
-  고객에게 **본인 주문·충전 상태변경** 알림
-- **감사 로그**: 주요 행위 append-only 기록
-- **무중단 스키마 마이그레이션**: 부팅 시 누락 컬럼 자동 추가(`down -v` 불필요)
+1. **DetectionFilter**(인라인): SQLi(q), XSS/음수수량(본문), DDoS/랜섬(rate), 4xx/5xx 이상탐지
+   + **UploadService.autoDetect**(악성 파일명/경로조작)
+2. **IncidentService.report** → ① 방어 플래그 즉시 ON ② 인시던트 기록 ③ **Risk Score** 산정 ④ **Discord 경고**
+3. **air-orchestrator/responder.py** → LLM/템플릿 **자동 소스패치** → `verify.sh` 재공격 검증 → 커밋
 
-## 빠른 시작
+## IR 자동대응
 
-### 1) 환경변수
+- **Risk Score**: 유형 → severity(CRITICAL/HIGH/MEDIUM/LOW) + score(0~100). `/air/incidents` 응답에 enrich.
+  (SQLi/랜섬 95, 업로드악성 90, 음수수량/경로조작 85, IDOR 80, XSS 75, DDoS 70, 이상 50~60)
+- **Discord 웹훅**: 환경변수 `AIR_DISCORD_WEBHOOK`. 인시던트마다 위험도 포함 경고를 **비동기 전송**(미설정 시 no-op).
+- **IR 대시보드**: `super_admin` 로그인 → 상단 **🛡 AIR** — 방어 플래그 토글 + 인시던트(위험도 뱃지/유형/IP/조치/시각) 실시간.
+
+## AIR 제어 API (super_admin)
+
+```
+GET  /api/v1/air/defenses                 # 방어 플래그 상태
+POST /api/v1/air/defenses/{key}/enable    # / disable
+GET  /api/v1/air/incidents?limit=         # severity/riskScore 포함
+GET  /api/v1/air/rules  · POST · DELETE /rules/{id}   # 런타임 동적 룰
+```
+
+## 빠른 시작 (vuln-lab)
+
 ```bash
-cp .env.example .env
-# JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD 등 설정
+# .env: JWT_ACCESS_SECRET / JWT_REFRESH_SECRET / ADMIN_PASSWORD (강하게)
+#       AIR_DISCORD_WEBHOOK=<디스코드 웹훅 URL>   (선택, IR 알림)
+docker-compose -p airlab -f docker-compose.lab.yml up -d --build
+# 접속: http://<호스트>:8081/     로그인: qudfhr / 3rdProject!
 ```
+시드 데이터: 테넌트 **`demo`**(데모상점) + 상품 4 + 고객 **`demo-customer / Demo1234!`**(잔액 50만).
 
-### 2) Docker Compose 실행 (백엔드 + 프론트 nginx)
-```bash
-docker-compose up -d --build
-```
-- 접속: `http://<호스트>` (nginx 80)
-- 헬스: `curl http://localhost/api/v1/health`
-
-### 3) 로컬 프론트 개발 (Node 불필요)
-```bash
-cd frontend
-python -m http.server 5173      # 또는 start-frontend.bat
-# 브라우저: http://localhost:5173  (로그인 화면에서 서버 주소 입력)
-```
-
-## API 요약 (`/api/v1`)
-
-| 영역 | 대표 엔드포인트 |
-|---|---|
-| 인증 | `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` |
-| 테넌트 | `GET /tenants` · `GET /tenants/managed` · `POST /tenants` · `PATCH /tenants/{id}` · `*/admins` |
-| 사용자 | `GET/POST /users` · `PATCH /users/{id}`(역할/소속) · `GET /users/me` |
-| 상품 | `GET/POST /tenants/{tid}/products` · `PATCH/DELETE .../{id}` |
-| 주문 | `POST /tenants/{tid}/orders` · `GET .../my` · `PATCH .../{id}/status` |
-| 가입요청 | `POST /tenants/{tid}/signup-requests`(공개) · `.../{id}/approve|reject` |
-| 충전요청 | `POST /tenants/{tid}/charge-requests` · `.../{id}/approve|reject` |
-| 알림 | `GET /notifications/pending-signups` (주문+가입+충전 대기 집계) |
-| 감사 | `GET /audit/recent` · `/audit/me` |
-
-## 프로젝트 구조
+## 데모 플로우
 
 ```
-backend/                      # Spring Boot API
-  src/main/java/com/shop/
-    config/                   # Security, DataSource, MyBatis, Bootstrap, SchemaMigration
-    controller/               # Auth, User, Tenant, Product, Order, Signup, Charge, Notification, Audit
-    domain/                   # User, Tenant, Product, Order, SignupRequest, ChargeRequest, ...
-    dto/ mapper/ security/ service/ util/
-  src/main/resources/
-    application.yml  schema.sql  mapper/*.xml
-  Dockerfile  pom.xml
-frontend/                     # 정적 SPA + nginx
-  index.html  css/  js/(api.js, app.js)  nginx.conf  Dockerfile
-docker-compose.yml  .env.example  README.md
+1) 공격      python air-attack/attack.py <시나리오> --base http://<host>:8081 \
+                    --admin-user qudfhr --admin-pass '****'
+2) 자율방어  탐지 → 가드 자동 ON(DEFENDED) + Discord 경고 + 대시보드 인시던트
+3) (선택)    air-orchestrator/responder.py 로 자동 소스패치 시연
 ```
+시나리오: `negative-qty · sqli · xss · idor · upload · ddos · ransom · unknown` (취약=exit1 / 방어=exit0)
 
-## 보안 주의
+## 오케스트레이터 (자동 소스패치)
 
-- `.env`, `*.pem`, JWT 시크릿은 절대 커밋하지 않습니다 (`.gitignore` 처리).
-- 운영/공개 노출 전 **JWT 시크릿·관리자 비밀번호를 반드시 교체**하세요.
-- 공개 데모 시 보안그룹은 신뢰 IP로 제한하는 것을 권장합니다.
+- `knowledge.py` : 취약 유형별 패치 템플릿/검증(음수수량·SQLi·XSS·IDOR·**업로드**)
+- `responder.py` : 인시던트 폴링 → LLM/휴리스틱 패치 → `verify.sh` 재공격 검증 → 커밋
+  - 무료 데모: `responder.py --heuristic` / 실제 LLM: `AIR_LLM_PROVIDER`(anthropic|gemini|groq)
+
+## 운영 주의
+
+- 시연 후 **`/air/rules` 전삭제**(단일 nginx IP 환경에서 IP 차단룰이 전체차단 방지).
+- `.env`, `*.pem`, 웹훅 URL은 **커밋 금지**. 의도적 취약 — 격리/신뢰 IP 전용.
+
+## 브랜치 구도
+
+`feature/web`(취약 baseline `:80`) ↔ **`feature/air-defense`**(자율방어 `:8081`) / `feature/air-attack`(DAST) / `dev`(CI).
 
 ---
-_본 저장소는 학습/테스트 목적의 테스트베드입니다._
+_학습/보안 실습용 자율방어 테스트베드입니다._
