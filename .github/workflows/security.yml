@@ -30,17 +30,8 @@ jobs:
           pip install poetry
           poetry install --no-root
 
-      - name: Create Report Directory
-        run: mkdir -p reports/semgrep
-
       - name: Run Semgrep Scan
-        # --error 제거, 취약점이 나와도 파이프라인이 멈추지 않도록 || true 추가
-        run: |
-          poetry run semgrep scan \
-            --config auto \
-            . \
-            --json \
-            --output reports/semgrep/semgrep.json || true 
+        run: bash scripts/security/run-semgrep.sh
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
@@ -58,17 +49,8 @@ jobs:
       - name: Create Report Directory
         run: mkdir -p reports/trivy
 
-      - name: Build Docker Image
-        run: docker build -t air-app:latest ./backend 
-
       - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: air-app:latest
-          format: json
-          output: reports/trivy/trivy.json
-          severity: CRITICAL,HIGH
-          exit-code: 0
+        run: bash scripts/security/run-trivy.sh
 
       - name: Upload Trivy Results
         uses: actions/upload-artifact@v4
@@ -90,38 +72,12 @@ jobs:
 
       - name: Start Application
         run: docker compose up -d
-
-      - name: Wait for Application
-        run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost/healthz; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose ps
-          docker compose logs
-          exit 1
       
       - name: Create Report Directory
         run: mkdir -p reports/zap
 
       - name: Run ZAP Baseline Scan
-        run: |
-          docker run --rm \
-            --add-host=host.docker.internal:host-gateway \
-            -v $(pwd)/reports/zap:/zap/wrk \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-            -t http://host.docker.internal \
-            -r zap-report.html \
-            -J zap-report.json || true
-
-      - name: Ensure ZAP Report Exists
-        run: |
-          if [ ! -f reports/zap/zap-report.json ]; then
-            echo '{"site":[]}' > reports/zap/zap-report.json
-          fi
+        run: bash scripts/security/run-zap.sh
 
       - name: Debug Report Files
         run: ls -al reports/zap
@@ -173,14 +129,8 @@ jobs:
           name: zap-report
           path: reports/zap
 
-      - name: Verify ZAP Report
-        run: |
-          test -f reports/zap/zap-report.json
-
       - name: Generate Security Summary
-        run: |
-          mkdir -p reports/summary
-          poetry run python scripts/generate_summary.py
+        run: bash scripts/security/run-summary.sh
 
       - name: Upload Summary Report
         uses: actions/upload-artifact@v4

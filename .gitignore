@@ -18,6 +18,7 @@ build/
 *.class
 *.jar
 !**/maven-wrapper.jar
+reports/
 
 # ── 로그 ───────────────────────────────────────────────────
 *.log
