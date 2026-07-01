@@ -42,10 +42,29 @@ public class AirController {
     }
 
     @GetMapping("/incidents")
-    public ResponseEntity<ApiResponse<List<SecurityIncident>>> incidents(
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> incidents(
             @RequestParam(defaultValue = "100") int limit, @AuthenticationPrincipal User actor) {
         requireSuper(actor);
-        return ResponseEntity.ok(ApiResponse.ok(incidentService.recent(limit)));
+        List<Map<String, Object>> enriched = incidentService.recent(limit).stream()
+                .map(AirController::enrich).toList();
+        return ResponseEntity.ok(ApiResponse.ok(enriched));
+    }
+
+    /** [IR] 인시던트에 위험도(severity/riskScore) 를 덧붙여 반환(엔티티/DB 무변경). */
+    private static Map<String, Object> enrich(SecurityIncident i) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("id", i.getId());
+        m.put("type", i.getType());
+        m.put("severity", RiskScoring.severity(i.getType()));
+        m.put("riskScore", RiskScoring.score(i.getType()));
+        m.put("endpoint", i.getEndpoint());
+        m.put("clientIp", i.getClientIp());
+        m.put("actor", i.getActor());
+        m.put("payload", i.getPayload());
+        m.put("actionTaken", i.getActionTaken());
+        m.put("status", i.getStatus());
+        m.put("createdAt", i.getCreatedAt());
+        return m;
     }
 
     /** 외부 오케스트레이터가 자동 소스패치 결과를 기록 — status=PATCHED|FAILED, action=설명 */
