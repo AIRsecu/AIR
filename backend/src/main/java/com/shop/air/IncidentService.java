@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 공격 인시던트 대응 오케스트레이터.
@@ -34,6 +35,10 @@ public class IncidentService {
             Map.entry("UPLOAD_PATH_TRAVERSAL", DefenseRegistry.UPLOAD_FILE_GUARD)
     );
 
+    // [플러딩 방지] (유형+출처)별 최근 보고 시각 — 창 내 중복 인시던트/Discord 억제
+    private final Map<String, Long> lastReport = new ConcurrentHashMap<>();
+    private static final long DEDUP_WINDOW_MS = 60_000L;
+
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {
         // [#1 적응형] 알려진 유형이면 전용 가드, 미지/이상(UNKNOWN_ANOMALY 등)이면 일반 shield 로 폴백.
         String defenseKey = TYPE_TO_DEFENSE.getOrDefault(type, DefenseRegistry.AIR_SHIELD);
@@ -45,6 +50,16 @@ public class IncidentService {
         } else {
             action = "ALREADY_DEFENDED:" + defenseKey;
         }
+
+        // [플러딩 방지] 동일 (유형+출처) 반복은 60s 내 1회만 기록/알림. 방어 arming 은 위에서 이미 보장.
+        String who = clientIp != null ? clientIp : (actor != null ? actor : (endpoint != null ? endpoint : "-"));
+        String dedupKey = type + "|" + who;
+        long now = System.currentTimeMillis();
+        Long prev = lastReport.get(dedupKey);
+        if (prev != null && now - prev < DEDUP_WINDOW_MS) return;   // 반복 억제(인시던트/Discord 스킵)
+        lastReport.put(dedupKey, now);
+        if (lastReport.size() > 4096)                              // 메모리 상한 정리
+            lastReport.entrySet().removeIf(e -> now - e.getValue() > DEDUP_WINDOW_MS);
 
         SecurityIncident inc = SecurityIncident.builder()
                 .id(UlidUtil.generate())
