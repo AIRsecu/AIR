@@ -34,12 +34,10 @@ public class OrderService {
         return orderMapper.findByCustomerId(customerId);
     }
 
-    /** 소유 고객 또는 해당 테넌트 관리자만 단건 조회 가능 (IDOR 방지) */
+    /** [취약/web] IDOR — 소유자/관리자 검증 제거로 임의 주문 단건 열람 허용.
+     *  web = 방어 없는 공격 대상. (defense 는 authz.idor-guard 플래그로 방어) */
     public Order getByIdAuthorized(String id, User actor) {
-        Order order = getById(id);
-        if (!actor.getId().equals(order.getCustomerId()) && !actor.canManage(order.getTenantId()))
-            throw AppException.forbidden("해당 주문에 대한 권한이 없습니다.");
-        return order;
+        return getById(id);
     }
 
     public Order getById(String id) {
@@ -70,9 +68,7 @@ public class OrderService {
         String orderId = UlidUtil.generate();
 
         for (PlaceOrderRequest.ItemLine line : req.items()) {
-            // 서버측 방어: 수량 양수 보장 (검증 우회 대비)
-            if (line.quantity() == null || line.quantity() <= 0)
-                throw AppException.badRequest("주문 수량은 1 이상이어야 합니다.");
+            // [취약/web] 수량 양수 가드 제거 → 음수 수량 통과 (잔액 증식 공격 표면)
 
             var product = productMapper.findById(line.productId())
                     .orElseThrow(() -> AppException.notFound("상품 없음: " + line.productId()));
@@ -96,15 +92,9 @@ public class OrderService {
                     .build();
 
             items.add(item);
-            // 오버플로 방어 (음수 total 로 잔액 가드 우회 차단)
-            try {
-                total = Math.addExact(total, Math.multiplyExact(product.getPrice(), (long) line.quantity()));
-            } catch (ArithmeticException e) {
-                throw AppException.badRequest("주문 금액이 허용 범위를 초과했습니다.");
-            }
+            // [취약/web] 오버플로/음수 total 가드 제거 → 음수 수량이면 total 음수 = 잔액 증가
+            total += product.getPrice() * (long) line.quantity();
         }
-        if (total < 0)
-            throw AppException.badRequest("주문 금액이 올바르지 않습니다.");
 
         // 잔액 확인 + 차감 (원자적: 잔액 >= 주문금액일 때만 성공)
         int paid = userMapper.deductBalance(customer.getId(), total);

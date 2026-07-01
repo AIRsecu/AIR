@@ -17,4 +17,7 @@ public interface ProductMapper {
     void softDelete(@Param("id") String id);
     int decreaseStock(@Param("id") String id, @Param("qty") int qty);
     void increaseStock(@Param("id") String id, @Param("qty") int qty);
+
+    // [취약/web] 상품명 검색 — ${q} 동적 SQL 로 SQL Injection 표면 (방어 플래그 없음)
+    List<Product> searchByNameVulnerable(@Param("tenantId") String tenantId, @Param("q") String q);
 }

@@ -33,6 +33,14 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.ok(productService.listByTenant(tenantId, !showAll)));
     }
 
+    /** 공개 – 상품명 검색 ([취약/web] ${q} 동적 SQL → SQL Injection 표면) */
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<Product>>> search(
+            @PathVariable String tenantId,
+            @RequestParam(defaultValue = "") String q) {
+        return ResponseEntity.ok(ApiResponse.ok(productService.search(tenantId, q)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Product>> get(
             @PathVariable String tenantId,

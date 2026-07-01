@@ -24,6 +24,11 @@ public class ProductService {
                 : productMapper.findByTenantId(tenantId);
     }
 
+    /** [취약/web] 상품명 검색 — 동적 SQL(${}) 사용 → SQL Injection 표면 (방어 없음) */
+    public List<Product> search(String tenantId, String q) {
+        return productMapper.searchByNameVulnerable(tenantId, q);
+    }
+
     public Product getById(String id) {
         return productMapper.findById(id)
                 .orElseThrow(() -> AppException.notFound("상품을 찾을 수 없습니다."));

@@ -1,20 +1,17 @@
 package com.shop.dto.order;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
+// [취약/web] @Valid 캐스케이드·수량 제약(@Min/@Max/@Size) 제거 → 음수·과대 수량 주문 허용.
+//           web = 방어 없는 공격 대상. (defense 는 order.qty-guard 플래그로 방어)
 public record PlaceOrderRequest(
-        @NotEmpty @Size(max = 100) List<@Valid ItemLine> items   // 중첩 제약 캐스케이드 검증
+        @NotEmpty List<ItemLine> items
 ) {
     public record ItemLine(
             @NotBlank String productId,
-            @NotNull @Min(1) @Max(100000) Integer quantity
+            Integer quantity                 // 제약 없음: 음수/0/초대형 통과
     ) {}
 }
