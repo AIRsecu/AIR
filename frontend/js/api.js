@@ -175,6 +175,28 @@ const API = (() => {
     placeOrder:    (tid, b)        => request('POST', `/tenants/${tid}/orders`, b),
     updateOrderStatus:(tid, id, s) => request('PATCH', `/tenants/${tid}/orders/${id}/status`, { status: s }),
 
+    // uploads (파일 업로드 — multipart; [AIR] upload.file-guard 로 취약/방어 전환)
+    uploadFile:    (tid, file) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const headers = {};
+      if (getAccess()) headers['Authorization'] = 'Bearer ' + getAccess();
+      return fetch(apiUrl(`/tenants/${tid}/uploads`), { method: 'POST', headers, body: fd })
+        .then(async res => {
+          const t = await res.text(); let j = null; if (t) { try { j = JSON.parse(t); } catch {} }
+          if (!res.ok) throw new ApiError(res.status, j?.code || ('HTTP_' + res.status),
+            j?.message || ('업로드 실패 (HTTP ' + res.status + ')'));
+          return j;
+        });
+    },
+    downloadUrl:   (tid, name)     => apiUrl(`/tenants/${tid}/uploads/download?name=`) + encodeURIComponent(name),
+
+    // AIR 제어/관측 (super_admin) — 방어 토글 + 인시던트
+    airDefenses:   ()              => request('GET', '/air/defenses'),
+    airEnable:     (key)           => request('POST', `/air/defenses/${key}/enable`, {}),
+    airDisable:    (key)           => request('POST', `/air/defenses/${key}/disable`, {}),
+    airIncidents:  (limit = 50)    => request('GET', `/air/incidents?limit=${limit}`),
+
     // audit
     auditRecent:   (limit = 100)   => request('GET', `/audit/recent?limit=${limit}`),
     auditMine:     ()              => request('GET', '/audit/me'),
