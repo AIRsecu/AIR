@@ -22,13 +22,15 @@ public class IncidentService {
     private final SecurityIncidentMapper incidentMapper;
 
     /** 인시던트 유형 → 방어 키 매핑 (알려진 시그니처) */
-    private static final Map<String, String> TYPE_TO_DEFENSE = Map.of(
-            "ORDER_NEGATIVE_QTY", DefenseRegistry.ORDER_QTY_GUARD,
-            "SQLI_ATTEMPT",       DefenseRegistry.SQL_INJECTION_GUARD,
-            "XSS_ATTEMPT",        DefenseRegistry.XSS_INPUT_GUARD,
-            "IDOR_ATTEMPT",       DefenseRegistry.AUTHZ_IDOR_GUARD,
-            "DDOS_FLOOD",         DefenseRegistry.DDOS_RATE_GUARD,
-            "RANSOM_MASSDELETE",  DefenseRegistry.RANSOM_MASSDELETE_GUARD
+    private static final Map<String, String> TYPE_TO_DEFENSE = Map.ofEntries(
+            Map.entry("ORDER_NEGATIVE_QTY",    DefenseRegistry.ORDER_QTY_GUARD),
+            Map.entry("SQLI_ATTEMPT",          DefenseRegistry.SQL_INJECTION_GUARD),
+            Map.entry("XSS_ATTEMPT",           DefenseRegistry.XSS_INPUT_GUARD),
+            Map.entry("IDOR_ATTEMPT",          DefenseRegistry.AUTHZ_IDOR_GUARD),
+            Map.entry("DDOS_FLOOD",            DefenseRegistry.DDOS_RATE_GUARD),
+            Map.entry("RANSOM_MASSDELETE",     DefenseRegistry.RANSOM_MASSDELETE_GUARD),
+            Map.entry("UPLOAD_MALICIOUS_FILE", DefenseRegistry.UPLOAD_FILE_GUARD),
+            Map.entry("UPLOAD_PATH_TRAVERSAL", DefenseRegistry.UPLOAD_FILE_GUARD)
     );
 
     public void report(String type, String endpoint, String clientIp, String actor, String payload) {
