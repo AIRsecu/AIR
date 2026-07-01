@@ -76,6 +76,19 @@ def _validate_idor(file_rel_path, patched):
         return True
     return "AUTHZ_IDOR_GUARD" not in patched
 
+# ── 파일업로드: UploadService 의 가드 분기를 항상 안전 경로로 고정 ──
+_UPLOAD_NEEDLE = "if (registry.isEnabled(DefenseRegistry.UPLOAD_FILE_GUARD)) {"
+def _template_upload(file_rel_path, original):
+    if "UploadService.java" not in file_rel_path or _UPLOAD_NEEDLE not in original:
+        return None
+    # store()/read() 두 가드 분기를 모두 무조건 안전 경로로 고정(플래그 무관).
+    return original.replace(_UPLOAD_NEEDLE,
+        "if (true) { // [AIR auto-patch] 업로드 방어 영구 활성화(플래그 무관)")
+def _validate_upload(file_rel_path, patched):
+    if "UploadService.java" not in file_rel_path:
+        return True
+    return _UPLOAD_NEEDLE not in patched   # 플래그 게이트(취약 우회 경로) 제거됨
+
 # 인시던트 유형 → (취약파일, 방어키, 검증시나리오, 템플릿폴백, 패치검증식)
 # ※ 로직 취약점만 '영구 소스패치' 대상. DDoS/랜섬은 본질상 런타임 레이트가드가 정답이라 비대상.
 VULNS = {
@@ -106,5 +119,19 @@ VULNS = {
         "scenario": "idor",
         "template": _template_idor,
         "validate": _validate_idor,
+    },
+    "UPLOAD_MALICIOUS_FILE": {
+        "files": ["backend/src/main/java/com/shop/service/UploadService.java"],
+        "defense_key": "upload.file-guard",
+        "scenario": "upload",
+        "template": _template_upload,
+        "validate": _validate_upload,
+    },
+    "UPLOAD_PATH_TRAVERSAL": {
+        "files": ["backend/src/main/java/com/shop/service/UploadService.java"],
+        "defense_key": "upload.file-guard",
+        "scenario": "upload",
+        "template": _template_upload,
+        "validate": _validate_upload,
     },
 }

