@@ -3,8 +3,7 @@
 Negative Quantity Attack (Business Logic Vulnerability) 공격 스크립트 (stdlib only)
 
 대상: POST /api/v1/tenants/{tid}/orders
-음수 수량(quantity < 0)으로 주문하면 total 이 음수가 되어,
-잔액 차감 조건(balance >= amount)이 항상 통과하고 잔액이 오히려 증가한다.
+음수 수량(quantity < 0)으로 주문하면 total 이 음수가 되어 잔액이 오히려 증가한다.
 공격 전후 잔액을 비교해 VULNERABLE/DEFENDED 를 판정한다.
 
 사용:
