@@ -68,15 +68,15 @@ GET  /api/v1/air/rules  · POST · DELETE /rules/{id}   # 런타임 동적 룰
 # .env: JWT_ACCESS_SECRET / JWT_REFRESH_SECRET / ADMIN_PASSWORD (강하게)
 #       AIR_DISCORD_WEBHOOK=<디스코드 웹훅 URL>   (선택, IR 알림)
 docker-compose -p airlab -f docker-compose.lab.yml up -d --build
-# 접속: http://<호스트>:8081/     로그인: qudfhr / 3rdProject!
+# 접속: http://<호스트>:8081/     로그인: super_admin 계정(.env 의 ADMIN_USERNAME / ADMIN_PASSWORD)
 ```
-시드 데이터: 테넌트 **`demo`**(데모상점) + 상품 4 + 고객 **`demo-customer / Demo1234!`**(잔액 50만).
+시드 데이터: 테넌트 **`demo`**(데모상점) + 상품 4 + 데모 고객 1(계정/비번은 시드 스크립트에서 설정, 잔액 50만).
 
 ## 데모 플로우
 
 ```
 1) 공격      python air-attack/attack.py <시나리오> --base http://<host>:8081 \
-                    --admin-user qudfhr --admin-pass '****'
+                    --admin-user <super_admin> --admin-pass '<password>'
 2) 자율방어  탐지 → 가드 자동 ON(DEFENDED) + Discord 경고 + 대시보드 인시던트
 3) (선택)    air-orchestrator/responder.py 로 자동 소스패치 시연
 ```
