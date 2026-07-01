@@ -169,6 +169,22 @@ const API = (() => {
     updateProduct: (tid, id, b)    => request('PATCH', `/tenants/${tid}/products/${id}`, b),
     deleteProduct: (tid, id)       => request('DELETE', `/tenants/${tid}/products/${id}`),
 
+    // uploads (파일 업로드 — multipart/form-data; [취약] 서버측 확장자/경로 검증 없음)
+    uploadFile:    (tid, file) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const headers = {};
+      if (getAccess()) headers['Authorization'] = 'Bearer ' + getAccess();
+      return fetch(apiUrl(`/tenants/${tid}/uploads`), { method: 'POST', headers, body: fd })
+        .then(async res => {
+          const t = await res.text(); let j = null; if (t) { try { j = JSON.parse(t); } catch {} }
+          if (!res.ok) throw new ApiError(res.status, j?.code || ('HTTP_' + res.status),
+            j?.message || ('업로드 실패 (HTTP ' + res.status + ')'));
+          return j;
+        });
+    },
+    downloadUrl:   (tid, name)     => apiUrl(`/tenants/${tid}/uploads/download?name=`) + encodeURIComponent(name),
+
     // orders
     listOrders:    (tid)           => request('GET', `/tenants/${tid}/orders`),
     myOrders:      (tid)           => request('GET', `/tenants/${tid}/orders/my`),

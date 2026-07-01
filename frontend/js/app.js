@@ -819,6 +819,15 @@ async function viewProducts(tenantId) {
         <div class="spacer"></div>
         <button class="btn btn-primary" id="new-product">+ 새 상품</button>
       </div>
+      <div style="border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:14px;margin:4px 0 14px">
+        <div style="font-weight:600;margin-bottom:6px">📎 상품 이미지/파일 업로드 <span class="badge red">취약 데모</span></div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">서버가 확장자·타입·경로를 검증하지 않습니다(방어 없음). 임의 파일 업로드·경로조작 가능.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="up-file">
+          <button class="btn btn-primary btn-sm" id="up-btn">업로드</button>
+        </div>
+        <div id="up-result" style="margin-top:10px;font-size:13px"></div>
+      </div>
       ${products.length ? `<div class="table-wrap"><table>
         <thead><tr><th>상품명</th><th>카테고리</th><th>가격</th><th>재고</th><th>상태</th><th></th></tr></thead>
         <tbody>${products.map(p => `<tr>
@@ -863,6 +872,27 @@ async function viewProducts(tenantId) {
         catch (e) { fail(e.message); }
       }
     }));
+
+    $('#up-btn').addEventListener('click', async () => {
+      const f = $('#up-file').files[0];
+      if (!f) { fail('파일을 선택하세요.'); return; }
+      try {
+        const r = await API.uploadFile(tenantId, f);
+        const d = (r && r.data) || {};
+        ok('업로드 완료 (서버 검증 없음)');
+        $('#up-result').innerHTML = `✅ 저장됨: <code>${esc(d.storedName || '')}</code>
+          <button class="btn btn-sm" id="up-view">조회</button>
+          <div class="muted" style="font-size:12px;margin-top:4px">확장자/타입 무검증 → 웹셸·저장형 XSS 표면</div>`;
+        const vb = $('#up-view');
+        if (vb) vb.addEventListener('click', async () => {
+          const headers = {}; const tok = API.getAccess();
+          if (tok) headers['Authorization'] = 'Bearer ' + tok;
+          const res = await fetch(API.downloadUrl(tenantId, d.storedName), { headers });
+          if (!res.ok) { fail('조회 실패 (HTTP ' + res.status + ')'); return; }
+          window.open(URL.createObjectURL(await res.blob()), '_blank');
+        });
+      } catch (e) { fail(e.message); }
+    });
   } catch (e) { content().innerHTML = errPage(e); }
 }
 
