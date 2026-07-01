@@ -57,13 +57,13 @@ cp .env.example .env       # JWT 시크릿/ADMIN_PASSWORD 등 강하게 설정(f
 docker-compose up -d --build
 # 접속: http://<호스트>/          (nginx :80)
 # 헬스: curl http://localhost/api/v1/health
-# 로그인: qudfhr / 3rdProject!   (super_admin)
+# 로그인: super_admin 계정 (부트스트랩 ADMIN_USERNAME / ADMIN_PASSWORD 를 .env 로 설정)
 ```
 
 ## 공격 검증 (DAST)
 
 [`feature/air-attack`](../../tree/feature/air-attack) 의 공격 스크립트를 `--base http://<호스트>:80` 으로 실행하면 5종 모두 **VULNERABLE** 로 성공합니다.
-(예: `python attack.py sqli --base http://<host>:80 --admin-user qudfhr --admin-pass ...`)
+(예: `python attack.py sqli --base http://<host>:80 --admin-user <super_admin> --admin-pass <password>`)
 
 ## 프로젝트 구조
 
