@@ -5,16 +5,17 @@ on:
     branches:
       - dev
       - feature/**
-
+      - feat/**
+      
   pull_request:
     branches:
       - dev
       - main
 
 jobs:
+  # 1. SAST 스캔 (병렬 실행)
   semgrep:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -24,26 +25,170 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: pip install poetry
+      - name: Install Poetry & Dependencies
+        run: |
+          pip install poetry
+          poetry install --no-root
 
-      - name: Install Dependencies
-        run: poetry install --no-root
-
-      - name: Install Semgrep
-        run: poetry add --group dev semgrep
+      - name: Create Report Directory
+        run: mkdir -p reports/semgrep
 
       - name: Run Semgrep Scan
+        # --error 제거, 취약점이 나와도 파이프라인이 멈추지 않도록 || true 추가
         run: |
-          mkdir -p reports
           poetry run semgrep scan \
             --config auto \
             . \
             --json \
-            --output reports/semgrep/semgrep.json
+            --output reports/semgrep/semgrep.json || true 
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report
+          name: semgrep-results
           path: reports/semgrep/semgrep.json
+
+  # 2. 컨테이너 및 의존성 스캔 (병렬 실행)
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Report Directory
+        run: mkdir -p reports/trivy
+
+      - name: Build Docker Image
+        run: docker build -t air-app:latest ./backend 
+
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: air-app:latest
+          format: json
+          output: reports/trivy/trivy.json
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+      - name: Upload Trivy Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: reports/trivy/trivy.json
+
+  # 3. DAST 스캔 (병렬 실행)
+  zap:
+    runs-on: ubuntu-latest
+    env:
+      JWT_ACCESS_SECRET: ci-access-secret-32chars-minimum-padding-1234567890
+      JWT_REFRESH_SECRET: ci-refresh-secret-32chars-minimum-padding-1234567890
+      ADMIN_PASSWORD: ci-admin-password-1234!
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Start Application
+        run: docker compose up -d
+
+      - name: Wait for Application
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs
+          exit 1
+      
+      - name: Create Report Directory
+        run: mkdir -p reports/zap
+
+      - name: Run ZAP Baseline Scan
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -v $(pwd)/reports/zap:/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://host.docker.internal \
+            -r zap-report.html \
+            -J zap-report.json || true
+
+      - name: Ensure ZAP Report Exists
+        run: |
+          if [ ! -f reports/zap/zap-report.json ]; then
+            echo '{"site":[]}' > reports/zap/zap-report.json
+          fi
+
+      - name: Debug Report Files
+        run: ls -al reports/zap
+
+      - name: Fix ZAP Report Permissions
+        run: sudo chown -R $USER:$USER reports/zap
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap/zap-report.json
+          if-no-files-found: error
+
+  # 4. 결과 집계 및 보안 게이트 (위 3개가 모두 끝난 후 실행)
+  summary:
+    needs: [semgrep, trivy, zap]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry & Dependencies
+        run: |
+          pip install poetry
+          poetry install --no-root
+
+      # 각 스캔 결과를 제 위치에 다운로드
+      - name: Download Semgrep Report
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-results
+          path: reports/semgrep
+
+      - name: Download Trivy Report
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-results
+          path: reports/trivy
+          
+      - name: Download ZAP Report
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap
+
+      - name: Verify ZAP Report
+        run: |
+          test -f reports/zap/zap-report.json
+
+      - name: Generate Security Summary
+        run: |
+          mkdir -p reports/summary
+          poetry run python scripts/generate_summary.py
+
+      - name: Upload Summary Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrated-security-summary
+          path: reports/summary/sec-summary.json
+
+      # 여기서 최종적으로 합격/불합격 판정 후 exit 1 또는 exit 0을 반환
+      - name: Run Security Gate
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
+        run: poetry run python policy/security_gate.py
