@@ -25,6 +25,8 @@ services:
       - APP_BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - APP_CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081}
       - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/shop.db
+      # [IR] Discord 웹훅 — 실제 URL 은 .env 에만(커밋 금지). 미설정 시 no-op.
+      - AIR_DISCORD_WEBHOOK=${AIR_DISCORD_WEBHOOK:-}
     volumes:
       - airlab-data:/data
     healthcheck:
