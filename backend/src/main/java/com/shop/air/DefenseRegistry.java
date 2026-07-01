@@ -30,6 +30,7 @@ public class DefenseRegistry {
     public static final String AUTHZ_IDOR_GUARD    = "authz.idor-guard";    // 기본 OFF=취약(소유자 검증 생략)
     public static final String DDOS_RATE_GUARD     = "ddos.rate-guard";     // 기본 OFF=취약(레이트리밋 없음)
     public static final String RANSOM_MASSDELETE_GUARD = "ransom.massdelete-guard"; // 기본 OFF=취약(대량삭제 무제한)
+    public static final String UPLOAD_FILE_GUARD   = "upload.file-guard";   // 기본 OFF=취약(무검증 업로드/경로조작)
     // ── #1 적응형(미지공격) ──
     public static final String ANOMALY_DETECTION   = "anomaly.detection";   // 기본 ON=이상탐지 활성
     public static final String AIR_SHIELD          = "air.shield";          // 기본 OFF=일반 shield(의심출처 격리)
@@ -42,6 +43,7 @@ public class DefenseRegistry {
             Map.entry(AUTHZ_IDOR_GUARD,        false),
             Map.entry(DDOS_RATE_GUARD,         false),
             Map.entry(RANSOM_MASSDELETE_GUARD, false),
+            Map.entry(UPLOAD_FILE_GUARD,       false),
             Map.entry(ANOMALY_DETECTION,       true),
             Map.entry(AIR_SHIELD,              false),
             Map.entry(INVARIANT_ROW_CAP,       false),
