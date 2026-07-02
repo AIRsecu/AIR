@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ZAP Baseline Scan 실행 스크립트
 # 사용: ./baseline_scan.sh [TARGET_URL]
-# TARGET_URL 기본값: http://host.docker.internal:8081 (feature/air-defense vuln-lab)
+# TARGET_URL 기본값: http://host.docker.internal:8081
 #
 # Windows Docker Desktop 환경에서는 호스트 디렉터리를 zap 컨테이너에 직접 bind mount하면
 # 쓰기 권한이 없어 리포트를 생성할 수 없다. 그래서 named volume을 중간에 두고,
