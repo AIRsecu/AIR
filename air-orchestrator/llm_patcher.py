@@ -13,7 +13,7 @@ AIR LLM 패치/분류 생성기 — 멀티 공급자 (의존성 없음 / urllib)
 
 키가 하나도 없거나 호출 실패/거부 시 None 반환 → 호출측이 템플릿/휴리스틱/shield 로 폴백(하이브리드).
 """
-import json, os, urllib.request, urllib.error
+import json, os, re, urllib.request, urllib.error
 
 ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL   = "claude-opus-4-8"
@@ -165,3 +165,32 @@ def classify_and_rule(incident):
     except Exception as e:
         print(f"[llm] 분류 JSON 파싱 실패({e}): {text[:200]} → 폴백")
         return None
+
+
+# ── [AIR #6] LLM 출력 정적 스캔 ────────────────────────────────
+# LLM 이 생성한 '전체 파일 재작성' 패치는 신뢰경계 밖 코드다. 취약을 막는 척하며
+# 백도어/원격실행/데이터 유출/난독 페이로드를 심을 수 있으므로 커밋 전 정적 스캔한다.
+# 오탐을 줄이기 위해 '원본에 없던' 위험 구문이 '패치에 새로 등장'한 경우만 플래그한다.
+# (대상은 Order/Product/UploadService·UploadController 로, 이 구문들이 정상 등장할 일이 없음)
+_DANGER_PATTERNS = [
+    (r"Runtime\s*\.\s*getRuntime|ProcessBuilder|\.exec\s*\(", "OS 명령 실행"),
+    (r"Class\s*\.\s*forName|\.setAccessible\s*\(|getDeclaredMethod|getDeclaredField", "리플렉션"),
+    (r"ObjectInputStream|\.readObject\s*\(", "역직렬화(RCE 벡터)"),
+    (r"new\s+Socket\s*\(|ServerSocket|HttpURLConnection|URLConnection|HttpClient|new\s+URL\s*\(",
+     "임의 네트워크 연결(유출/콜백)"),
+    (r"Base64\s*\.\s*get(De|En)coder|javax\.script|ScriptEngine|Nashorn", "난독/스크립트 실행"),
+    (r"deleteIfExists|FileUtils\.deleteDirectory|Files\.delete\s*\(|\.deleteOnExit", "파일 삭제(파괴적)"),
+    (r"sk-ant-[A-Za-z0-9]|AKIA[0-9A-Z]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----", "하드코딩 자격/키"),
+    (r"csrf\s*\(\s*\)\s*\.\s*disable|permitAll\s*\(", "인증/인가 무력화"),
+]
+
+def scan_patch(file_rel_path, original, patched):
+    """LLM 패치의 위험 구문 탐지. '원본에 없고 패치에 새로 생긴' 매치만 반환.
+    반환: [(사유, 예시라인), ...]  (비어있으면 통과)"""
+    findings = []
+    for pat, why in _DANGER_PATTERNS:
+        rx = re.compile(pat)
+        if rx.search(patched) and not rx.search(original or ""):
+            line = next((ln.strip() for ln in patched.splitlines() if rx.search(ln)), "")
+            findings.append((why, line[:160]))
+    return findings

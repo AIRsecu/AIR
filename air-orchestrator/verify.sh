@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # AIR 패치 검증: 패치된 워킹트리로 throwaway 백엔드 빌드 →
 #   런타임 방어/탐지 모두 OFF → 공격 재현 → '소스 자체로' 차단되면 통과(exit 0).
-# 사용: verify.sh <repo_dir> <scenario> <admin_user> <admin_pass>
+# 사용: verify.sh <repo_dir> <scenario> <admin_user> <admin_pass> [regression:0|1]
 set -u
-REPO="$1"; SCENARIO="$2"; AU="$3"; AP="$4"
+REPO="$1"; SCENARIO="$2"; AU="$3"; AP="$4"; REG="${5:-0}"
 BASE="http://localhost:8082"
 PROJ="airverify"
 COMPOSE="docker-compose -p $PROJ -f docker-compose.verify.yml"
@@ -40,8 +40,19 @@ echo "[verify] 방어상태: $(curl -s $BASE/api/v1/air/defenses -H "$AUTH")"
 echo "[verify] 공격 재현($SCENARIO)…"
 python3 air-attack/attack.py --base "$BASE" --admin-user "$AU" --admin-pass "$AP" "$SCENARIO"
 RC=$?   # attack.py: 1=VULNERABLE(취약), 0=DEFENDED(차단)
-if [ $RC -eq 0 ]; then
-  echo "[verify] ✓ 소스 패치만으로 공격 차단됨 → 통과"; exit 0
-else
+if [ $RC -ne 0 ]; then
   echo "[verify] ✗ 패치 후에도 공격 성공 → 실패"; exit 1
 fi
+echo "[verify] ✓ 소스 패치만으로 공격 차단됨"
+
+# [AIR #6] 회귀 스모크: '단일 공격 시나리오만 통과' 한계 보완.
+#  패치가 취약만 막고 정상 기능/기동을 깨지 않았는지(앱 응답성) 확인.
+if [ "$REG" = "1" ]; then
+  echo "[verify] 회귀 스모크(정상기능 응답성)…"
+  HC=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/tenants" -H "$AUTH")
+  if [ "$HC" != "200" ]; then
+    echo "[verify] ✗ 회귀 실패: 정상 조회(/tenants) HTTP $HC (패치가 앱을 깨뜨림) → 실패"; exit 1
+  fi
+  echo "[verify] ✓ 회귀 스모크 통과(정상 조회 200)"
+fi
+echo "[verify] → 통과"; exit 0

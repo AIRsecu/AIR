@@ -4,9 +4,16 @@ AIR 자율 방어 오케스트레이터 (별도 프로세스).
 
 폐루프:
   /air/incidents 폴링 → 미처리(MITIGATED) 인시던트 → 취약 위치 매핑
-  → Claude API 패치 생성(실패 시 템플릿 폴백) → 격리 브랜치 적용
+  → LLM 패치 생성(실패 시 템플릿 폴백) → 격리 브랜치 적용
   → 검증(런타임 플래그 OFF로 공격 재현 → 소스 자체로 차단되는지) → 통과 시 커밋(+push)
   → 인시던트 status=PATCHED/FAILED 기록.  실패 시 롤백(런타임 플래그는 유지).
+
+안전 모델(#6 자동 push 리스크 완화):
+  - 자동 반영은 격리 브랜치(air/auto-patch/*)까지만. base 브랜치 직접 push/머지 없음.
+  - LLM 생성 패치는 검증식 + 정적 스캔(llm_patcher.scan_patch: OS실행/리플렉션/역직렬화/
+    네트워크/난독/파괴적삭제/하드코딩키/인가무력화)을 모두 통과해야 채택. 하나라도 걸리면 템플릿 폴백.
+  - LLM 패치는 사람 리뷰 게이트: --allow-llm-push 없으면 push 보류(브랜치만). 템플릿 패치는 결정적이라 --push 로 허용.
+  - --regression: 단일 공격 시나리오만 통과하면 되는 한계를 보완해 정상기능 회귀 스모크까지 확인.
 
 실행 예:
   python responder.py --base http://localhost:8081 --admin-user admin --admin-pass <pw> \
@@ -113,16 +120,18 @@ def current_branch(repo):
 
 
 # ── 검증 (런타임 재공격) ──────────────────────────────────────
-def verify(repo, scenario, admin_user, admin_pass):
-    """verify.sh: 패치된 워킹트리로 throwaway 스택 빌드 → 가드 OFF로 재공격 → DEFENDED면 0."""
+def verify(repo, scenario, admin_user, admin_pass, regression=False):
+    """verify.sh: 패치된 워킹트리로 throwaway 스택 빌드 → 가드 OFF로 재공격 → DEFENDED면 0.
+    regression=True 면 verify.sh 가 재공격 성공 후 회귀 스모크(정상기능 응답성)도 확인."""
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'verify.sh')
-    r = subprocess.run(['bash', script, repo, scenario, admin_user, admin_pass],
-                       text=True)
+    r = subprocess.run(['bash', script, repo, scenario, admin_user, admin_pass,
+                        '1' if regression else '0'], text=True)
     return r.returncode == 0
 
 
 # ── 인시던트 1건 처리 ─────────────────────────────────────────
-def handle(inc, base, token, repo, base_branch, do_verify, do_push, admin_user, admin_pass):
+def handle(inc, base, token, repo, base_branch, do_verify, do_push, admin_user, admin_pass,
+           allow_llm_push=False, regression=False):
     itype = inc['type']
     vuln = VULNS[itype]
     branch = f"air/auto-patch/{inc['id'][:10].lower()}"
@@ -132,20 +141,32 @@ def handle(inc, base, token, repo, base_branch, do_verify, do_push, admin_user, 
     git(repo, 'checkout', base_branch)
     git(repo, 'checkout', '-B', branch, base_branch)
 
-    # 2) 패치 생성/적용 (하이브리드)
+    # 2) 패치 생성/적용 (하이브리드). LLM 결과는 검증식 + 정적 스캔(#6) 을 모두 통과해야 채택.
     source = None
+    used_llm = False
     for rel in vuln['files']:
         path = os.path.join(repo, rel)
         with open(path, encoding='utf-8') as f:
             original = f.read()
 
         patched = llm_patcher.generate_patch(rel, original, inc)   # LLM 시도
+        llm_ok = False
         if patched and vuln['validate'](rel, patched):
+            findings = llm_patcher.scan_patch(rel, original, patched)   # [#6] 위험 구문 정적 스캔
+            if findings:
+                print(f"[!] LLM 패치 정적스캔 위험 감지 → 거부, 템플릿 폴백: {rel}")
+                for why, line in findings:
+                    print(f"      - {why}: {line}")
+            else:
+                llm_ok = True
+        elif patched:
+            print("[*] LLM 패치가 검증식 불통과 → 템플릿 폴백")
+
+        if llm_ok:
             source = 'LLM'
+            used_llm = True
         else:
-            if patched:
-                print("[*] LLM 패치가 검증식 불통과 → 템플릿 폴백")
-            patched = vuln['template'](rel, original)               # 템플릿 폴백
+            patched = vuln['template'](rel, original)               # 템플릿 폴백(결정적, 검토됨)
             if not patched or not vuln['validate'](rel, patched):
                 print(f"[!] 패치 생성 실패: {rel} → 인시던트 FAILED")
                 _rollback(repo, base_branch, branch)
@@ -160,7 +181,7 @@ def handle(inc, base, token, repo, base_branch, do_verify, do_push, admin_user, 
     # 3) 검증: 런타임 플래그 OFF로 재공격 → 소스 자체로 막혀야 통과
     if do_verify:
         print("[*] 검증 시작(런타임 재공격, 가드 OFF)…")
-        if not verify(repo, vuln['scenario'], admin_user, admin_pass):
+        if not verify(repo, vuln['scenario'], admin_user, admin_pass, regression):
             print("[!] 검증 실패(여전히 취약/빌드오류) → 롤백, 런타임 플래그 유지, FAILED")
             _rollback(repo, base_branch, branch)
             set_status(base, token, inc['id'], 'FAILED', 'VERIFY_FAILED')
@@ -176,7 +197,13 @@ def handle(inc, base, token, repo, base_branch, do_verify, do_push, admin_user, 
         f"AIR 오케스트레이터가 탐지된 공격에 대응해 자동 생성/검증한 소스 패치.\n"
         f"payload: {str(inc.get('payload'))[:120]}")
     action = f"AUTO_PATCHED:{source}:{branch}"
-    if do_push:
+    # [AIR #6] 사람 리뷰 게이트: LLM 생성 패치는 --allow-llm-push 없이는 자동 push 안 함(브랜치만 남김).
+    #  템플릿 패치는 knowledge.py 의 결정적·검토된 치환이라 기존대로 push 허용.
+    if do_push and used_llm and not allow_llm_push:
+        action += ":review-required"
+        print(f"[검토 필요] LLM 생성 패치라 자동 push 보류. 브랜치 검토 후 수동 push: {branch}")
+        print(f"           (신뢰 파이프라인이면 --allow-llm-push 로 자동화)")
+    elif do_push:
         try:
             git(repo, 'push', '-u', 'origin', branch)
             action += ":pushed"
@@ -227,7 +254,8 @@ def run(args):
             for inc in known:
                 try:
                     handle(inc, args.base, token, args.repo, base_branch,
-                           not args.no_verify, args.push, args.admin_user, args.admin_pass)
+                           not args.no_verify, args.push, args.admin_user, args.admin_pass,
+                           args.allow_llm_push, args.regression)
                 except Exception as e:
                     print(f"[!] 처리 중 예외: {e}")
                     _rollback(args.repo, base_branch, f"air/auto-patch/{inc['id'][:10].lower()}")
@@ -261,6 +289,10 @@ def main():
     ap.add_argument('--once', action='store_true', help='1회만 처리 후 종료')
     ap.add_argument('--no-verify', action='store_true', help='런타임 재공격 검증 생략(빠른 데모)')
     ap.add_argument('--push', action='store_true', help='검증 통과 시 origin 으로 브랜치 push')
+    ap.add_argument('--allow-llm-push', action='store_true',
+                    help='[#6] LLM 생성 패치도 자동 push 허용(기본: LLM 패치는 사람 리뷰 게이트로 push 보류)')
+    ap.add_argument('--regression', action='store_true',
+                    help='[#6] 검증 시 재공격 차단 확인 후 정상기능 회귀 스모크도 수행(패치가 앱을 깨뜨리는지)')
     ap.add_argument('--heuristic', action='store_true',
                     help='이상 인시던트에서 LLM 무키/실패 시 결정적 휴리스틱(출처IP 차단)으로 폐루프 완료')
     run(ap.parse_args())
