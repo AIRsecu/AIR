@@ -20,7 +20,7 @@ services:
       - JWT_REFRESH_TTL_HOURS=${JWT_REFRESH_TTL_HOURS:-168}
       # Bootstrap 관리자
       - APP_BOOTSTRAP_ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - APP_BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme1234!}
+      - APP_BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PASSWORD}
       # CORS
       - APP_CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       # SQLite DB 경로 (볼륨 마운트 경로)

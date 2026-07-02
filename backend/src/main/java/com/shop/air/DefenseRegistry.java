@@ -1,0 +1,77 @@
+package com.shop.air;
+
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * AIR 방어 토글 레지스트리.
+ * - 방어 가드는 코드에 존재하되 플래그로 ON/OFF (미존재=OFF=취약).
+ * - 공격 탐지 시 enable() 로 즉시 ON → 런타임 차단.
+ * - 인메모리 + DB 영속(재기동 보존).
+ */
+@Slf4j
+@Component
+@DependsOnDatabaseInitialization   // schema.sql(테이블 생성) 이후에 @PostConstruct 로드 보장
+@RequiredArgsConstructor
+public class DefenseRegistry {
+
+    /** 알려진 키와 초기 기본값 */
+    public static final String ORDER_QTY_GUARD     = "order.qty-guard";     // 기본 OFF=취약
+    public static final String SQL_INJECTION_GUARD = "sql.injection-guard"; // 기본 OFF=취약(${} 동적쿼리)
+    public static final String XSS_INPUT_GUARD     = "xss.input-guard";     // 기본 OFF=취약(원문 저장)
+    public static final String AUTHZ_IDOR_GUARD    = "authz.idor-guard";    // 기본 OFF=취약(소유자 검증 생략)
+    public static final String DDOS_RATE_GUARD     = "ddos.rate-guard";     // 기본 OFF=취약(레이트리밋 없음)
+    public static final String RANSOM_MASSDELETE_GUARD = "ransom.massdelete-guard"; // 기본 OFF=취약(대량삭제 무제한)
+    public static final String UPLOAD_FILE_GUARD   = "upload.file-guard";   // 기본 OFF=취약(무검증 업로드/경로조작)
+    // ── #1 적응형(미지공격) ──
+    public static final String ANOMALY_DETECTION   = "anomaly.detection";   // 기본 ON=이상탐지 활성
+    public static final String AIR_SHIELD          = "air.shield";          // 기본 OFF=일반 shield(의심출처 격리)
+    public static final String INVARIANT_ROW_CAP   = "invariant.row-cap";   // 기본 OFF=응답행수 상한(벡터무관)
+    public static final String DETECTION           = "air.detection";       // 기본 ON=시그니처 탐지활성
+    private static final Map<String, Boolean> KNOWN_DEFAULTS = Map.ofEntries(
+            Map.entry(ORDER_QTY_GUARD,         false),
+            Map.entry(SQL_INJECTION_GUARD,     false),
+            Map.entry(XSS_INPUT_GUARD,         false),
+            Map.entry(AUTHZ_IDOR_GUARD,        false),
+            Map.entry(DDOS_RATE_GUARD,         false),
+            Map.entry(RANSOM_MASSDELETE_GUARD, false),
+            Map.entry(UPLOAD_FILE_GUARD,       false),
+            Map.entry(ANOMALY_DETECTION,       true),
+            Map.entry(AIR_SHIELD,              false),
+            Map.entry(INVARIANT_ROW_CAP,       false),
+            Map.entry(DETECTION,               true)
+    );
+
+    private final DefenseFlagMapper mapper;
+    private final Map<String, Boolean> cache = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    void load() {
+        for (DefenseFlag f : mapper.findAll()) cache.put(f.getFlagKey(), f.isEnabled());
+        KNOWN_DEFAULTS.forEach((k, def) -> {
+            if (!cache.containsKey(k)) { cache.put(k, def); mapper.upsert(k, def); }
+        });
+        log.info("[AIR] DefenseRegistry loaded: {}", new TreeMap<>(cache));
+    }
+
+    public boolean isEnabled(String key) { return Boolean.TRUE.equals(cache.get(key)); }
+
+    public void enable(String key)  { set(key, true);  }
+    public void disable(String key) { set(key, false); }
+
+    private void set(String key, boolean enabled) {
+        cache.put(key, enabled);
+        mapper.upsert(key, enabled);
+        log.warn("[AIR] defense '{}' -> {}", key, enabled ? "ENABLED(차단)" : "DISABLED(취약)");
+    }
+
+    public Map<String, Boolean> all() { return new TreeMap<>(cache); }
+}

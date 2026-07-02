@@ -42,6 +42,22 @@
         ORDER BY created_at DESC
     </select>
 
+    <!-- [AIR] 취약: ${q} 문자열 직접 치환 → SQL Injection 가능 (vuln-lab 전용) -->
+    <select id="searchByNameVulnerable" resultMap="ProductRM">
+        SELECT * FROM products
+        WHERE tenant_id = #{tenantId} AND is_active = 1 AND deleted_at IS NULL
+          AND name LIKE '%${q}%'
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- [AIR] 안전: #{q} 파라미터 바인딩 → 입력이 항상 리터럴로 처리됨 -->
+    <select id="searchByNameSafe" resultMap="ProductRM">
+        SELECT * FROM products
+        WHERE tenant_id = #{tenantId} AND is_active = 1 AND deleted_at IS NULL
+          AND name LIKE '%' || #{q} || '%'
+        ORDER BY created_at DESC
+    </select>
+
     <update id="update" parameterType="com.shop.domain.Product">
         UPDATE products SET
             name        = #{name},

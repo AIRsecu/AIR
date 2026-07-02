@@ -24,6 +24,10 @@ reports/
 *.log
 logs/
 
+# ── Python (공격 모듈) ─────────────────────────────────────
+__pycache__/
+*.pyc
+
 # ── 프론트엔드(혹시 모를) 의존성 ───────────────────────────
 node_modules/
 dist/
@@ -38,3 +42,12 @@ dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── IR Automation ──────────────────────────────────────────
+ir-automation/.env
+ir-automation/incidents/*
+!ir-automation/incidents/.gitkeep
+ir-automation/logs/*
+!ir-automation/logs/.gitkeep
+ir-automation/*.db
+ir-automation/**/__pycache__/
