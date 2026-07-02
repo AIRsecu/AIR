@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-@MapperScan("com.shop.mapper")
+@MapperScan({"com.shop.mapper", "com.shop.air"})   // air 패키지 매퍼(DefenseFlag/SecurityIncident) 포함
 public class ShopApplication {
     public static void main(String[] args) {
         SpringApplication.run(ShopApplication.class, args);

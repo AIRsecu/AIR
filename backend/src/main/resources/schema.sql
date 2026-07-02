@@ -133,6 +133,26 @@ CREATE TABLE IF NOT EXISTS charge_requests (
     FOREIGN KEY (user_id)   REFERENCES users(id)
 );
 
+-- [AIR] 방어 토글 플래그 (key=방어식별자, enabled=ON/OFF; 미존재=OFF=취약)
+CREATE TABLE IF NOT EXISTS defense_flags (
+    flag_key   TEXT PRIMARY KEY,
+    enabled    INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
+-- [AIR] 보안 인시던트 (공격 탐지·대응 기록)
+CREATE TABLE IF NOT EXISTS security_incidents (
+    id           TEXT PRIMARY KEY,
+    type         TEXT NOT NULL,          -- ORDER_NEGATIVE_QTY 등
+    endpoint     TEXT,
+    client_ip    TEXT,
+    actor        TEXT,
+    payload      TEXT,                   -- 탐지된 요청 본문(잘림)
+    action_taken TEXT,                   -- DEFENSE_ENABLED:order.qty-guard 등
+    status       TEXT NOT NULL DEFAULT 'DETECTED', -- DETECTED|MITIGATED|PATCHED|FAILED
+    created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
 -- 감사 로그
 CREATE TABLE IF NOT EXISTS audit_logs (
     id             TEXT PRIMARY KEY,

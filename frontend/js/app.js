@@ -420,6 +420,7 @@ function shell(activeKey, contentHtml) {
     ['dashboard', '#/dashboard', '대시보드'],
     ['tenants',   '#/tenants',   '테넌트'],
     ['users',     '#/users',     '사용자'],
+    ['air',       '#/air',       '🛡 AIR'],
     ['audit',     '#/audit',     '감사로그'],
   ];
   else if (isAdmin()) nav = [
@@ -804,6 +805,51 @@ async function resolveTenantName(tenantId) {
   } catch { return '상점'; }
 }
 
+async function viewAir() {
+  shell('air', loadingHtml());
+  try {
+    const [defenses, incidents] = await Promise.all([
+      API.airDefenses().then(r => r.data),
+      API.airIncidents(50).then(r => r.data),
+    ]);
+    const sevBadge = (s) => {
+      const map = { CRITICAL: 'red', HIGH: 'red', MEDIUM: 'gray', LOW: 'gray' };
+      return `<span class="badge ${map[s] || 'gray'}">${esc(s || '-')}</span>`;
+    };
+    const defRows = Object.entries(defenses).sort().map(([k, on]) => `<tr>
+      <td><code>${esc(k)}</code></td>
+      <td>${on ? '<span class="badge red">ON (방어)</span>' : '<span class="badge gray">OFF (취약)</span>'}</td>
+      <td><button class="btn btn-sm" data-toggle="${esc(k)}" data-on="${on}">${on ? '해제' : '활성'}</button></td>
+    </tr>`).join('');
+    content().innerHTML = `
+      <div class="page-head"><h2 style="margin:0">🛡 AIR 자율방어</h2>
+        <div class="spacer"></div><button class="btn btn-sm" id="air-refresh">새로고침</button></div>
+      <div class="table-wrap" style="margin:8px 0 20px"><table>
+        <thead><tr><th>방어 플래그</th><th>상태</th><th></th></tr></thead>
+        <tbody>${defRows}</tbody></table></div>
+      <div class="page-head"><h3 style="margin:0">인시던트</h3>
+        <span class="badge gray" style="margin-left:8px">${incidents.length}건</span></div>
+      ${incidents.length ? `<div class="table-wrap" style="margin-top:8px"><table>
+        <thead><tr><th>위험도</th><th>유형</th><th>엔드포인트</th><th>IP</th><th>조치</th><th>시각</th></tr></thead>
+        <tbody>${incidents.map(i => `<tr>
+          <td>${sevBadge(i.severity)} <span class="muted">${i.riskScore != null ? i.riskScore : ''}</span></td>
+          <td><code>${esc(i.type || '')}</code></td>
+          <td class="muted" style="font-size:12px">${esc(i.endpoint || '')}</td>
+          <td>${esc(i.clientIp || '-')}</td>
+          <td style="font-size:12px">${esc(i.actionTaken || '')}</td>
+          <td class="muted nowrap" style="font-size:12px">${esc(String(i.createdAt || '').replace('T', ' ').slice(0, 19))}</td>
+        </tr>`).join('')}</tbody></table></div>`
+        : emptyHtml('🛡', '인시던트가 없습니다.')}`;
+
+    $('#air-refresh').addEventListener('click', viewAir);
+    $$('[data-toggle]').forEach(b => b.addEventListener('click', async () => {
+      const k = b.dataset.toggle, on = b.dataset.on === 'true';
+      try { on ? await API.airDisable(k) : await API.airEnable(k); ok(`${k} → ${on ? 'OFF' : 'ON'}`); viewAir(); }
+      catch (e) { fail(e.message); }
+    }));
+  } catch (e) { content().innerHTML = errPage(e); }
+}
+
 async function viewProducts(tenantId) {
   const navKey = isSuper() ? 'tenants' : 'mytenants';
   shell(navKey, loadingHtml());
@@ -818,6 +864,15 @@ async function viewProducts(tenantId) {
         <span class="badge gray">${products.length}개 상품</span>
         <div class="spacer"></div>
         <button class="btn btn-primary" id="new-product">+ 새 상품</button>
+      </div>
+      <div style="border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:14px;margin:4px 0 14px">
+        <div style="font-weight:600;margin-bottom:6px">📎 상품 이미지/파일 업로드</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">AIR <code>upload.file-guard</code> 활성 시 확장자·경로·크기 검증(방어), 미활성 시 취약.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="up-file">
+          <button class="btn btn-primary btn-sm" id="up-btn">업로드</button>
+        </div>
+        <div id="up-result" style="margin-top:10px;font-size:13px"></div>
       </div>
       ${products.length ? `<div class="table-wrap"><table>
         <thead><tr><th>상품명</th><th>카테고리</th><th>가격</th><th>재고</th><th>상태</th><th></th></tr></thead>
@@ -863,6 +918,26 @@ async function viewProducts(tenantId) {
         catch (e) { fail(e.message); }
       }
     }));
+
+    $('#up-btn').addEventListener('click', async () => {
+      const f = $('#up-file').files[0];
+      if (!f) { fail('파일을 선택하세요.'); return; }
+      try {
+        const r = await API.uploadFile(tenantId, f);
+        const d = (r && r.data) || {};
+        ok('업로드 완료');
+        $('#up-result').innerHTML = `✅ 저장됨: <code>${esc(d.storedName || '')}</code>
+          <button class="btn btn-sm" id="up-view">조회</button>`;
+        const vb = $('#up-view');
+        if (vb) vb.addEventListener('click', async () => {
+          const headers = {}; const tok = API.getAccess();
+          if (tok) headers['Authorization'] = 'Bearer ' + tok;
+          const res = await fetch(API.downloadUrl(tenantId, d.storedName), { headers });
+          if (!res.ok) { fail('조회 실패 (HTTP ' + res.status + ')'); return; }
+          window.open(URL.createObjectURL(await res.blob()), '_blank');
+        });
+      } catch (e) { fail(e.message); }
+    });
   } catch (e) { content().innerHTML = errPage(e); }
 }
 
@@ -1246,6 +1321,7 @@ function router() {
   } else if (hash === '#/tenants' && isSuper()) viewTenants();
   else if (hash === '#/my-tenants' && (isAdmin() || isSuper())) viewMyTenants();
   else if (hash === '#/users' && isSuper()) viewUsers();
+  else if (hash === '#/air' && isSuper()) viewAir();
   else if (hash === '#/audit' && isSuper()) viewAudit();
   else if ((m = hash.match(/^#\/tenant\/([^/]+)\/products$/))) viewProducts(m[1]);
   else if ((m = hash.match(/^#\/tenant\/([^/]+)\/orders$/))) viewOrders(m[1]);
