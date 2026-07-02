@@ -11,9 +11,9 @@
 - playbook/: NIST IR 4단계 플레이북
 
 ## 실행 방법
-\`\`\`bash
+```
 # 팀 레포 루트에서
 poetry install
 cp ir-automation/.env.example ir-automation/.env
 # .env에 Discord Webhook URL 입력
-\`\`\`
+```
