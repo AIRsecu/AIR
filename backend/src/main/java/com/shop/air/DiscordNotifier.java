@@ -37,12 +37,14 @@ public class DiscordNotifier {
             default          -> "⚪";
         };
         String content = emoji + " **[AIR] " + severity + " (risk " + score + ")** 공격 탐지·자동대응\n"
-                + "• 유형: `" + nz(inc.getType()) + "`\n"
-                + "• 엔드포인트: `" + nz(inc.getEndpoint()) + "`\n"
-                + "• 출처 IP: " + nz(inc.getClientIp()) + "\n"
+                + "• 유형: `" + codeSafe(inc.getType()) + "`\n"
+                + "• 엔드포인트: `" + codeSafe(inc.getEndpoint()) + "`\n"
+                + "• 출처 IP: `" + codeSafe(inc.getClientIp()) + "`\n"
                 + "• 조치: " + nz(inc.getActionTaken()) + "\n"
                 + "• 상태: " + nz(inc.getStatus());
-        String body = "{\"content\":" + jsonStr(content) + "}";
+        // [AIR] #5 allowed_mentions parse:[] → 공격자가 필드에 주입한 @everyone/@here/멘션을 무력화.
+        String body = "{\"content\":" + jsonStr(content)
+                + ",\"allowed_mentions\":{\"parse\":[]}}";
         try {
             HttpRequest req = HttpRequest.newBuilder(URI.create(webhook))
                     .timeout(Duration.ofSeconds(8))
@@ -60,6 +62,17 @@ public class DiscordNotifier {
     }
 
     private static String nz(String s) { return s == null ? "-" : s; }
+
+    /**
+     * [AIR] #5 백틱 코드스팬 안에 넣을 공격자 영향 값 정리:
+     *  백틱 제거(코드스팬 탈출→마크다운/멘션 인젝션 방지) + 개행/제어문자 제거 + 길이 제한.
+     *  (코드스팬 내부에서는 *,_,~ 등 마크다운이 렌더되지 않으므로 백틱만 무력화하면 충분)
+     */
+    private static String codeSafe(String s) {
+        if (s == null || s.isBlank()) return "-";
+        String t = s.replace("`", "'").replaceAll("[\\r\\n\\t]", " ");
+        return t.length() > 300 ? t.substring(0, 300) + "…" : t;
+    }
 
     private static String jsonStr(String s) {
         return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
