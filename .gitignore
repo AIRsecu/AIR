@@ -37,3 +37,12 @@ dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── IR Automation ──────────────────────────────────────────
+ir-automation/.env
+ir-automation/incidents/*
+!ir-automation/incidents/.gitkeep
+ir-automation/logs/*
+!ir-automation/logs/.gitkeep
+ir-automation/*.db
+ir-automation/**/__pycache__/
