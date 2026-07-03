@@ -42,6 +42,9 @@ dist/
 Thumbs.db
 desktop.ini
 
+# ── DAST 스캔 결과 ─────────────────────────────────────────
+dast/zap/reports/
+
 # ── IR Automation ──────────────────────────────────────────
 ir-automation/.env
 ir-automation/incidents/*
