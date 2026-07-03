@@ -33,8 +33,14 @@
 - **allowlist**: `ALLOWLIST_IPS` (정확 IP 또는 CIDR) 는 차단 제외
 - **사설/루프백 보호**: `BLOCK_PRIVATE_IPS=false`(기본) 면 RFC1918·loopback 은 절대 차단 안 함
 - **저위험 skip**: LOW 등급은 기록/알림만, 네트워크 차단 안 함
-- **TTL 자동 해제**: 만료 IP 는 reconcile 시 활성목록에서 빠져 자동 해제(룰 무한누적 방지)
+- **TTL 자동 해제**: 만료 IP 는 reconcile 시 활성목록에서 빠져 자동 해제(룰 무한누적 방지).
+  이벤트 수신 시 + `RECONCILE_INTERVAL_SECONDS` 마다 주기적으로도 실행 → 트래픽이 끊겨도 제때 풀림.
 - **멱등성**: 이미 차단 중인 IP 는 재집행·재알림 없이 TTL 만 연장
+
+> nginx 모드 주의: `deny` 는 access 단계에서 평가되므로 `return`/정적 응답으로 조기 종료되는
+> 경로에는 적용되지 않는다. 실제 보호 대상인 `/api/` 프록시 트래픽에는 정상 적용됨. 또한 엣지
+> nginx 가 `realip`(set_real_ip_from + real_ip_header X-Forwarded-For)로 실 클라이언트 IP 를
+> `$remote_addr` 로 잡아야 앱 clientIp 와 deny 대상이 일치한다.
 
 ## 실행
 

@@ -8,10 +8,14 @@
     GET  /healthz       헬스체크
     GET  /blocklist     현재 활성 차단(TTL 남은 것)
     GET  /incidents/{id}  저장된 인시던트 레코드
+
+백그라운드: reconcile_interval_seconds 마다 만료 차단을 해제(트래픽이 없어도 제때 풀림).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
@@ -21,9 +25,40 @@ from ir.pipeline import IRPipeline
 
 settings = get_settings()
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+log = logging.getLogger("ir.app")
 
-app = FastAPI(title="AIR IR Automation", version="0.1.0")
 pipeline = IRPipeline(settings)
+
+
+async def _reconcile_loop(interval: int) -> None:
+    """주기적으로 만료 차단을 해제(이벤트가 없어도 TTL 이 제때 만료되도록)."""
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            # reconcile 은 파일 I/O + nginx reload 등 블로킹 → 스레드로 오프로드
+            released = await asyncio.to_thread(pipeline.blocker.reconcile)
+            if released:
+                log.info("[IR] 주기 reconcile — %d건 자동해제", len(released))
+        except Exception as e:  # 루프가 죽지 않도록 흡수
+            log.warning("[IR] 주기 reconcile 오류: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task: asyncio.Task | None = None
+    if settings.reconcile_interval_seconds > 0:
+        task = asyncio.create_task(_reconcile_loop(settings.reconcile_interval_seconds))
+        log.info("[IR] 주기 reconcile 시작 (%ds 간격)", settings.reconcile_interval_seconds)
+    yield
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(title="AIR IR Automation", version="0.1.0", lifespan=lifespan)
 
 
 class IngestPayload(BaseModel):

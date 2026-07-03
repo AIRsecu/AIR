@@ -73,6 +73,11 @@ class Settings:
     critical_block_duration: int = field(
         default_factory=lambda: _int("CRITICAL_BLOCK_DURATION", 120)
     )
+    # 주기적 reconcile 간격(초) — 만료 IP 를 트래픽이 없어도 제때 해제(0=끔).
+    # 이벤트 구동 reconcile 만으로는 트래픽 정지 시 만료 차단이 안 풀리므로 필요.
+    reconcile_interval_seconds: int = field(
+        default_factory=lambda: _int("RECONCILE_INTERVAL_SECONDS", 30)
+    )
     # --- 차단 모드 + 안전장치 ---
     block_mode: str = field(default_factory=lambda: os.getenv("BLOCK_MODE", "simulation"))
     allowlist_ips: list[str] = field(default_factory=lambda: _csv("ALLOWLIST_IPS"))
