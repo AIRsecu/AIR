@@ -47,9 +47,25 @@ cp ir-automation/.env.example ir-automation/.env   # .env 에 Discord/모드 설
 uvicorn ir.app:app --host 0.0.0.0 --port 8090
 ```
 
-### 앱 연동 (유입)
-앱 `IncidentService.report()` 가 인시던트를 만든 뒤 이 서비스의 `POST /ingest` 로
-그 JSON(camelCase 계약)을 그대로 전달한다. 로그 tail 은 폴백 경로.
+### 앱 연동 (유입) — 앱 push 방식 확정
+앱 `IncidentService.report()` 가 인시던트를 만든 뒤 `IrForwarder`(com.shop.air)가
+`POST /ingest` 로 그 JSON(camelCase 계약)을 비동기 전달한다. dedup 통과분만 보내
+IR 쪽 플러딩도 억제된다. 앱이 죽어도 IR, IR 이 죽어도 앱 요청은 영향 없음(best-effort).
+
+앱 컨테이너 env 로 대상 주소 주입(미설정 시 no-op):
+```
+AIR_IR_INGEST_URL=http://<ir-host>:8090/ingest
+# 같은 EC2 에서 uvicorn 을 호스트에 띄우면: http://host.docker.internal:8090/ingest
+```
+
+### 배포 검증 절차 (EC2)
+1. IR 기동:  `uvicorn ir.app:app --host 0.0.0.0 --port 8090`  (BLOCK_MODE=simulation)
+2. 앱 재배포: `docker-compose -f docker-compose.lab.yml up -d --build`  (AIR_IR_INGEST_URL 설정)
+3. 공격 1발: air-attack sqli → 앱 로그 `[AIR->IR] ingest 전달` 확인
+4. IR 확인:  `curl http://localhost:8090/blocklist`  에 공격 IP 가 잡히는지
+5. 데모 후:  simulation 이라 실차단 없음. nginx 실모드 전환 시 `/air/rules` 및 deny.conf 정리
+
+로그 tail 은 폴백 경로(앱 push 불가 환경용).
 
 ### 엔드포인트
 - `POST /ingest` — 인시던트 수신 → 대응 실행
