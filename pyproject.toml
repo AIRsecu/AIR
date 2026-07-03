@@ -22,7 +22,15 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[project.optional-dependencies]
+# aws_waf 차단 모드에서만 필요(기본 simulation 은 불필요): pip install '.[waf]'
+waf = [
+    "boto3 (>=1.35.0,<2.0.0)"
+]
+
 [dependency-groups]
 dev = [
-    "semgrep (>=1.168.0,<2.0.0)"
+    "semgrep (>=1.168.0,<2.0.0)",
+    "pytest (>=8.3.0,<9.0.0)",
+    "httpx (>=0.27.0,<1.0.0)"
 ]
