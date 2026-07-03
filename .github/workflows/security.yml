@@ -6,6 +6,7 @@ on:
       - dev
       - feature/**
       - feat/**
+      - main
       
   pull_request:
     branches:
@@ -13,7 +14,9 @@ on:
       - main
 
 jobs:
-  # 1. SAST 스캔 (병렬 실행)
+  # ==========================================
+  # 1. SAST 스캔
+  # ==========================================
   semgrep:
     runs-on: ubuntu-latest
     steps:
@@ -25,22 +28,31 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry & Dependencies
-        run: |
-          pip install poetry
-          poetry install --no-root
-
       - name: Create Report Directory
         run: mkdir -p reports/semgrep
 
-      - name: Run Semgrep Scan
-        # --error 제거, 취약점이 나와도 파이프라인이 멈추지 않도록 || true 추가
-        run: |
-          poetry run semgrep scan \
-            --config auto \
-            . \
-            --json \
-            --output reports/semgrep/semgrep.json || true 
+      # 러너에 Semgrep 설치
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # 타겟(Spring, MyBatis, JWT, JS) 최적화 룰 및 노이즈 제거 옵션 적용
+      - name: Run Semgrep Scan (Optimized for Java+JS)
+        run: >
+          semgrep scan 
+          --config "p/java" 
+          --config "p/jwt" 
+          --config "p/javascript" 
+          --config "p/owasp-top-ten" 
+          --config "p/secrets"
+          --exclude ".github/**" 
+          --exclude "docs/**" 
+          --exclude "frontend/css/**" 
+          --exclude "**/*.sql" 
+          --exclude "scripts/**" 
+          --exclude "policy/**" 
+          . 
+          --json 
+          --output reports/semgrep/semgrep.json || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
@@ -48,7 +60,9 @@ jobs:
           name: semgrep-results
           path: reports/semgrep/semgrep.json
 
-  # 2. 컨테이너 및 의존성 스캔 (병렬 실행)
+  # ==========================================
+  # 2. 컨테이너 및 의존성 스캔
+  # ==========================================
   trivy:
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +90,9 @@ jobs:
           name: trivy-results
           path: reports/trivy/trivy.json
 
-  # 3. DAST 스캔 (병렬 실행)
+  # ==========================================
+  # 3. DAST 스캔
+  # ==========================================
   zap:
     runs-on: ubuntu-latest
     env:
@@ -136,7 +152,9 @@ jobs:
           path: reports/zap/zap-report.json
           if-no-files-found: error
 
-  # 4. 결과 집계 및 보안 게이트 (위 3개가 모두 끝난 후 실행)
+  # ==========================================
+  # 4. 결과 집계 및 보안 게이트
+  # ==========================================
   summary:
     needs: [semgrep, trivy, zap]
     runs-on: ubuntu-latest
@@ -148,11 +166,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install Poetry & Dependencies
-        run: |
-          pip install poetry
-          poetry install --no-root
 
       # 각 스캔 결과를 제 위치에 다운로드
       - name: Download Semgrep Report
@@ -180,15 +193,23 @@ jobs:
       - name: Generate Security Summary
         run: |
           mkdir -p reports/summary
-          poetry run python scripts/generate_summary.py
 
-      - name: Upload Summary Report
+      - name: Extract Reports for LLM
+        run: |
+          python scripts/extract_semgrep.py
+          python scripts/extract_trivy.py
+          python scripts/extract_zap.py
+
+      - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
-          name: integrated-security-summary
-          path: reports/summary/sec-summary.json
+          name: integrated-security-reports
+          path: |
+            reports/summary/sec-summary.json
+            reports/semgrep/semgrep_for_llm.json
+            reports/trivy/trivy_for_llm.json
+            reports/zap/zap_for_llm.json
 
-      # 여기서 최종적으로 합격/불합격 판정 후 exit 1 또는 exit 0을 반환
       - name: Run Security Gate
         continue-on-error: ${{ github.ref != 'refs/heads/main' }}
-        run: poetry run python policy/security_gate.py
+        run: python policy/security_gate.py
