@@ -42,7 +42,14 @@ def to_findings(items: list[dict]) -> list[Finding]:
                 verdict=Verdict(
                     is_false_positive=triage.get("is_false_positive"),
                     final_risk=sev,
-                    reason=assessment.get("reason") or triage.get("reason"),
+                    # 판정 사유 키 이름 관용: Digrass 모델(model_dump)이 fp_reason/impact_reason
+                    # 으로 뱉어도, 정규 reason 으로 뱉어도 모두 수용.
+                    reason=(
+                        assessment.get("reason")
+                        or assessment.get("impact_reason")
+                        or triage.get("reason")
+                        or triage.get("fp_reason")
+                    ),
                 ),
                 raw=it,
             )

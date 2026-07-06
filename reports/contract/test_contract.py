@@ -79,5 +79,21 @@ class AggregateTest(unittest.TestCase):
             self.assertIn(key, f)
 
 
+class AiAdapterToleranceTest(unittest.TestCase):
+    """Digrass 모델(model_dump)이 fp_reason/impact_reason 로 뱉어도 수용해야 한다."""
+
+    def test_reason_key_tolerance(self):
+        from adapters import from_ai
+        rec = {
+            "scan_tool": "SAST", "rule_id": "r1", "cwe": "CWE-89",
+            "triage": {"is_false_positive": False, "fp_reason": "raw concat"},
+            "assessment": {"final_risk": "High", "impact_reason": "internet-facing"},
+        }
+        f = from_ai.to_findings([rec])[0]
+        self.assertFalse(f.verdict.is_false_positive)
+        self.assertEqual(f.verdict.reason, "internet-facing")
+        self.assertEqual(f.severity.value, "HIGH")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
