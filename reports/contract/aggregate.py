@@ -39,22 +39,42 @@ def _load_json(path: Path):
         return None
 
 
-def _load_ir_records(reports_dir: Path) -> list[dict]:
-    """IR 인시던트: 단일 JSON 배열 또는 incidents/*.json(레코드당 1파일) 둘 다 지원."""
-    single = reports_dir / "ir" / "incidents.json"
-    if single.exists():
-        data = _load_json(single)
-        return data if isinstance(data, list) else ([data] if data else [])
-    inc_dir = reports_dir / "ir" / "incidents"
-    if inc_dir.is_dir():
-        out = []
-        for p in sorted(inc_dir.glob("*.json")):
+def _read_ir_path(path: Path) -> list[dict]:
+    """파일(배열/단일) 또는 디렉터리(*.json 레코드당 1파일)를 인시던트 레코드 리스트로."""
+    if path.is_dir():
+        out: list[dict] = []
+        for p in sorted(path.glob("*.json")):
             rec = _load_json(p)
             if isinstance(rec, list):
                 out.extend(rec)
             elif rec:
                 out.append(rec)
         return out
+    if path.exists():
+        data = _load_json(path)
+        if isinstance(data, list):
+            return data
+        return [data] if data else []
+    return []
+
+
+def _load_ir_records(reports_dir: Path) -> list[dict]:
+    """IR 인시던트 수집.
+
+    경로 우선순위:
+      1) 환경변수 INCIDENT_STORAGE_PATH (IR store 가 실제로 쓰는 경로 — 병록 IR config)
+      2) reports/ir/incidents.json
+      3) reports/ir/incidents/*.json
+    """
+    env_path = os.environ.get("INCIDENT_STORAGE_PATH")
+    if env_path:
+        recs = _read_ir_path(Path(env_path))
+        if recs:
+            return recs
+    for candidate in (reports_dir / "ir" / "incidents.json", reports_dir / "ir" / "incidents"):
+        recs = _read_ir_path(candidate)
+        if recs:
+            return recs
     return []
 
 
