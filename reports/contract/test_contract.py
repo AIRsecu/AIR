@@ -35,6 +35,23 @@ class SeverityMapTest(unittest.TestCase):
         self.assertEqual(normalize_severity("zap", "bogus"), Severity.INFO)
 
 
+class NormalizeCweTest(unittest.TestCase):
+    """ZAP cweid 관용: 유효 CWE만, 0/-1/Unknown 은 None(상관 오염 방지)."""
+
+    def test_valid_ids(self):
+        from finding import normalize_cwe
+        self.assertEqual(normalize_cwe("89"), "CWE-89")
+        self.assertEqual(normalize_cwe("CWE-79"), "CWE-79")
+        self.assertEqual(normalize_cwe("693"), "CWE-693")
+
+    def test_zap_no_cwe_ids_become_none(self):
+        from finding import normalize_cwe
+        self.assertIsNone(normalize_cwe("0"))     # ← 회귀: 과거 'CWE-0'
+        self.assertIsNone(normalize_cwe("-1"))
+        self.assertIsNone(normalize_cwe("Unknown"))
+        self.assertIsNone(normalize_cwe(None))
+
+
 class AggregateTest(unittest.TestCase):
     def setUp(self):
         self.findings = aggregate.collect(SAMPLES)

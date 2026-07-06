@@ -61,9 +61,13 @@ def normalize_cwe(raw: Any) -> Optional[str]:
         return None
     m = _CWE_RE.search(str(raw))
     if m:
-        return f"CWE-{int(m.group(1))}"
+        n = int(m.group(1))
+        return f"CWE-{n}" if n > 0 else None
     s = str(raw).strip()
-    return f"CWE-{int(s)}" if s.isdigit() else None
+    # ZAP 은 CWE 없는 alert 에 cweid="0"/"-1" 을 쓴다 → 존재하지 않는 CWE-0 방지.
+    if s.lstrip("-").isdigit() and int(s) > 0:
+        return f"CWE-{int(s)}"
+    return None
 
 
 def _clean(d: dict) -> dict:
