@@ -18,6 +18,6 @@ test -f reports/zap/zap-report.json || {
   exit 1
 }
 
-poetry run python scripts/generate_summary.py
+python scripts/generate_summary.py
 
 echo "✓ Security summary generated"

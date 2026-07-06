@@ -7,7 +7,7 @@ mkdir -p reports/semgrep
 
 # Findings should be evaluated by the security gate, so the scan itself should
 # always publish JSON for the summary step.
-poetry run semgrep scan \
+semgrep scan \
   --config "p/java" \
   --config "p/jwt" \
   --config "p/javascript" \
