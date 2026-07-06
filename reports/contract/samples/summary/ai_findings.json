@@ -1,0 +1,29 @@
+[
+  {
+    "scan_tool": "SAST",
+    "rule_id": "java.lang.security.audit.sqli.jdbc-sqli",
+    "cwe": "CWE-89",
+    "file_path": "backend/src/main/java/com/shop/mapper/ProductMapper.java",
+    "line_number": 42,
+    "triage": {
+      "is_false_positive": false,
+      "reason": "Raw keyword concatenated into LIKE clause with no parameterization."
+    },
+    "assessment": {
+      "final_risk": "High",
+      "reason": "Search endpoint is unauthenticated and internet-facing; exploitable SQLi."
+    }
+  },
+  {
+    "scan_tool": "SAST",
+    "rule_id": "javascript.lang.security.audit.xss.innerhtml",
+    "cwe": "CWE-79",
+    "file_path": "frontend/js/product.js",
+    "line_number": 88,
+    "triage": {
+      "is_false_positive": true,
+      "reason": "resp.title is server-side escaped before render; DOM sink not reachable with attacker input."
+    },
+    "assessment": { "final_risk": "Info", "reason": "Mitigated by upstream escaping." }
+  }
+]
