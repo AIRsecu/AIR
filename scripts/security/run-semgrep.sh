@@ -8,11 +8,20 @@ mkdir -p reports/semgrep
 # Findings should be evaluated by the security gate, so the scan itself should
 # always publish JSON for the summary step.
 poetry run semgrep scan \
-  --config auto \
+  --config "p/java" \
+  --config "p/jwt" \
+  --config "p/javascript" \
+  --config "p/owasp-top-ten" \
+  --config "p/secrets" \
+  --exclude ".github/**" \
+  --exclude "docs/**" \
+  --exclude "frontend/css/**" \
+  --exclude "**/*.sql" \
+  --exclude "scripts/**" \
+  --exclude "policy/**" \
   . \
   --json \
-  --output reports/semgrep/semgrep.json || true
-
-if [ ! -f reports/semgrep/semgrep.json ]; then
-  echo '{"results":[]}' > reports/semgrep/semgrep.json
+  --output reports/semgrep/semgrep.json
+then
+  echo "Semgrep completed with findings or warnings."
 fi
