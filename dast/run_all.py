@@ -11,6 +11,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -70,6 +71,7 @@ SCRIPTS: list[dict] = [
         "endpoint": "/api/v1/health",
         "evidence": "60회 연속 요청 (RATE_LIMIT=30/10s 초과)",
         "message": "DDoS Rate Flood — 10초 창 내 한도 초과로 429 유도",
+        "sleep_after": 12,
     },
     {
         "script": "ransom_attack.py",
@@ -170,6 +172,9 @@ def main() -> int:
             print(f"[!] {cfg['script']}: VULNERABLE")
         else:
             print(f"[+] {cfg['script']}: DEFENDED")
+        if sleep := cfg.get("sleep_after", 0):
+            print(f"[~] {sleep}초 대기 중 (슬라이딩 윈도우 만료)...")
+            time.sleep(sleep)
 
     report = DastReport(
         generated_at=datetime.now(timezone.utc).isoformat(),
