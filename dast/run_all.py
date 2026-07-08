@@ -82,6 +82,7 @@ SCRIPTS: list[dict] = [
         "endpoint": "/api/v1/tenants/{tid}/products/{pid}",
         "evidence": "상품 10개 연속 DELETE (MASSDELETE_LIMIT=5 초과)",
         "message": "대량 삭제(랜섬 유사) — 연속 삭제로 massdelete-guard 트리거",
+        "sleep_after": 12,
     },
     {
         "script": "upload_attack.py",
@@ -92,6 +93,7 @@ SCRIPTS: list[dict] = [
         "endpoint": "/api/v1/tenants/{tid}/uploads",
         "evidence": "shell.jsp (위험 확장자), ../evil.png (경로조작), ../../etc/passwd (LFI)",
         "message": "파일 업로드 3종 벡터 — 위험 확장자·경로조작·LFI",
+        "sleep_after": 12,
     },
     {
         "script": "rowcap_attack.py",
