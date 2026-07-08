@@ -36,6 +36,18 @@ poetry run python sqli_attack.py --base http://localhost:8081 --admin-user admin
 poetry run python sqli_attack.py --base http://localhost:8081 --admin-user admin --admin-pass <pw>
 ```
 
+## 자동화 실행 (`run_all.py`)
+
+공격 스크립트 전체를 순차 실행하고 결과를 통일 포맷 JSON으로 저장한다.
+
+```powershell
+poetry run python dast/run_all.py --base http://localhost:8081 --admin-user admin --admin-pass <pw>
+```
+
+- 출력: `reports/dast/dast-results.json` (gitignore 대상 — 로컬 생성 파일)
+- `findings` 배열에는 **VULNERABLE 판정만** 포함된다. DEFENDED는 콘솔 출력으로만 표시된다.
+- 새 스크립트 추가 시 `run_all.py`의 `SCRIPTS` 리스트에 항목 1개를 추가한다.
+
 ## 주의사항
 
 - **`upload_attack.py` VULNERABLE 시연** — `air.detection` 외에 `upload.file-guard`도 비활성화해야 한다. 방어 시연 중 autoDetect가 `upload.file-guard`를 자동으로 ON하기 때문이다.
