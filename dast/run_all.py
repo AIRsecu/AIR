@@ -98,7 +98,7 @@ SCRIPTS: list[dict] = [
     {
         "script": "rowcap_attack.py",
         "auth": True,
-        "attack_type": None,  # 확인 필요
+        "attack_type": None,
         "severity": "MEDIUM",
         "cwe": None,
         "endpoint": "/api/v1/tenants/{tid}/products",
