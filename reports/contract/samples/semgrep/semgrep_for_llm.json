@@ -1,0 +1,20 @@
+[
+  {
+    "rule_id": "java.lang.security.audit.sqli.jdbc-sqli",
+    "severity": "ERROR",
+    "file_path": "backend/src/main/java/com/shop/mapper/ProductMapper.java",
+    "line_number": "42",
+    "message": "Detected string concatenation in SQL statement (possible SQL injection).",
+    "code_snippet": "\"SELECT * FROM product WHERE name LIKE '%\" + keyword + \"%'\"",
+    "cwe": "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+  },
+  {
+    "rule_id": "javascript.lang.security.audit.xss.innerhtml",
+    "severity": "WARNING",
+    "file_path": "frontend/js/product.js",
+    "line_number": "88",
+    "message": "User input flows into innerHTML (possible XSS).",
+    "code_snippet": "el.innerHTML = resp.title",
+    "cwe": "CWE-79"
+  }
+]
