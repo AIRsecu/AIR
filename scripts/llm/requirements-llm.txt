@@ -1,0 +1,10 @@
+# LLM 공급자 seam 선택 의존 (필요한 공급자만 설치하면 됨).
+# 기본(OpenAI)은 Digrass 의 scripts/ai_agent/requirements.txt 로 이미 커버됨.
+# 다른 공급자로 전환할 때만 해당 줄을 CI 에 추가하거나 이 파일을 설치.
+#
+#   pip install -r scripts/llm/requirements-llm.txt
+
+# langchain-openai>=0.1.0        # OpenAI  (이미 ai_agent/requirements.txt 에 있음)
+langchain-groq>=0.1.0            # Groq    (무료·빠름, GROQ_API_KEY)
+langchain-google-genai>=1.0.0   # Gemini  (무료 티어, GEMINI_API_KEY)
+langchain-anthropic>=0.1.0      # Claude  (ANTHROPIC_API_KEY)

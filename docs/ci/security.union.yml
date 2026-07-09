@@ -1,0 +1,106 @@
+# ⚠️ 제안(DRAFT) — 실제 .github/workflows/security.yml 은 JHyye 소유.
+# 이 파일은 병합 참고용 union 초안이다(리뷰 후 JHyye 가 반영). 여기 두면 실행되지 않는다.
+#
+# 통합 원칙:
+#   - 스캔 오케스트레이션 = JHyye 의 scripts/security/run-*.sh 유지
+#   - AI 재평가          = Digrass 파이프라인을 병록 seam 래퍼(run-ai.sh) 경유(무키 폴백)
+#   - 통합 리포트        = 병록 reports/contract/aggregate.py
+#   - 게이트             = JHyye policy/security_gate.py (main 에서만 차단)
+name: Security Pipeline
+
+on:
+  push:
+    branches: [dev, "feature/**", "feat/**"]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install semgrep
+      - run: bash scripts/security/run-semgrep.sh        # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: semgrep-results, path: reports/semgrep/semgrep.json }
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/security/run-trivy.sh          # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: trivy-results, path: reports/trivy/trivy.json }
+
+  zap:
+    runs-on: ubuntu-latest
+    env:
+      JWT_ACCESS_SECRET: ci-access-secret-32chars-minimum-padding-1234567890
+      JWT_REFRESH_SECRET: ci-refresh-secret-32chars-minimum-padding-1234567890
+      ADMIN_PASSWORD: ci-admin-password-1234!
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/security/run-zap.sh            # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: zap-report, path: reports/zap/zap-report.json, if-no-files-found: error }
+
+  summary:
+    needs: [semgrep, trivy, zap]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: semgrep-results, path: reports/semgrep }
+      - uses: actions/download-artifact@v4
+        with: { name: trivy-results, path: reports/trivy }
+      - uses: actions/download-artifact@v4
+        with: { name: zap-report, path: reports/zap }
+
+      # 통계 요약 + LLM 입력 축약 (JHyye/Digrass 기존)
+      - run: bash scripts/security/run-summary.sh        # generate_summary.py
+      - run: |
+          python scripts/extract_semgrep.py
+          python scripts/extract_trivy.py
+          python scripts/extract_zap.py
+
+      # AI 재평가 — 병록 seam 경유. 어떤 키가 있어도 동작, 없으면 휴리스틱(비차단).
+      - name: AI re-evaluation (provider seam)
+        env:
+          AIR_LLM_PROVIDER: ${{ vars.AIR_LLM_PROVIDER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pip install -r scripts/ai_agent/requirements.txt
+          # OpenAI 외 공급자 쓰면 아래 주석 해제:
+          # pip install -r scripts/llm/requirements-llm.txt
+          bash scripts/llm/run-ai.sh
+
+      # ★ 병록 통합기 — 스캔 + AI판정 + 런타임 IR 을 단일 리포트로
+      - name: Aggregate unified report
+        run: python reports/contract/aggregate.py
+      - name: Publish unified report to job summary
+        run: |
+          if [ -f reports/summary/unified_report.md ]; then
+            cat reports/summary/unified_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integrated-security-reports
+          path: |
+            reports/summary/sec-summary.json
+            reports/summary/ai_final_report.md
+            reports/summary/unified_report.json
+            reports/summary/unified_report.md
+
+      # 게이트 (JHyye) — main 에서만 차단
+      - name: Run Security Gate
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
+        run: python policy/security_gate.py

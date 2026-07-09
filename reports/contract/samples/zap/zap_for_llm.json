@@ -1,0 +1,18 @@
+[
+  {
+    "alert_name": "SQL Injection",
+    "risk_level": "High (Medium)",
+    "cwe_id": "89",
+    "description": "SQL injection may be possible on the search endpoint.",
+    "solution": "Use parameterized queries.",
+    "instances_count": "2",
+    "affected_targets": [
+      {
+        "url": "http://host.docker.internal/api/v1/search",
+        "method": "GET",
+        "parameter": "keyword",
+        "evidence": "' OR '1'='1"
+      }
+    ]
+  }
+]
