@@ -147,12 +147,23 @@ jobs:
           python scripts/extract_trivy.py
           python scripts/extract_zap.py
 
+      - name: Run AI Pipeline
+        run: |
+          python scripts/ai_agent/run_ai_pipeline.py
+
+      - name: Aggregate Findings
+        run: |
+          python reports/contract/aggregate.py
+
       - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
           name: integrated-security-reports
           path: |
             reports/summary/sec-summary.json
+            reports/summary/ai_findings.json
+            reports/summary/unified_report.json
+            reports/summary/unified_report.md
             reports/semgrep/semgrep_for_llm.json
             reports/trivy/trivy_for_llm.json
             reports/zap/zap_for_llm.json
