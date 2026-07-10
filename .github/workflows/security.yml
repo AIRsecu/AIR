@@ -147,13 +147,27 @@ jobs:
           python scripts/extract_trivy.py
           python scripts/extract_zap.py
 
-      - name: Run AI Pipeline
+      # AI 재평가 — 병록 seam 경유(키 자동감지·무키 휴리스틱, 비차단)
+      - name: AI re-evaluation (provider seam)
+        env:
+          AIR_LLM_PROVIDER: ${{ vars.AIR_LLM_PROVIDER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          python scripts/ai_agent/run_ai_pipeline.py
+          pip install -r scripts/ai_agent/requirements.txt
+          bash scripts/llm/run-ai.sh
 
+      # 통합 리포트(스캔 + AI + 런타임 IR → 단일)
       - name: Aggregate Findings
         run: |
           python reports/contract/aggregate.py
+
+      - name: Publish Unified Report
+        run: |
+          [ -f reports/summary/unified_report.md ] && \
+            cat reports/summary/unified_report.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Upload Reports
         uses: actions/upload-artifact@v4
