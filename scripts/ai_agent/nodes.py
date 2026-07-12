@@ -1,7 +1,13 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from state import ExtractedFacts, TriageResult, RiskAssessment, SecurityState
+from state import SastFacts, TrivyFacts, DastFacts, TriageResult, RiskAssessment, SecurityState
 
+"""llm = ChatOpenAI(
+    model="my-qwen",   # 모델명
+    base_url="http://localhost:11434/v1", # Ollama 로컬 서버 주소
+    api_key="ollama",
+    temperature=0,
+)"""
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # ==========================================
@@ -9,8 +15,8 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 # ==========================================
 def node_phase1_extractor(state: SecurityState) -> dict:
     scan_tool = state["scan_tool"]
-    
-    # 1. System Prompt
+
+    # System Prompt
     sys_prompt = f"""You are an expert DevSecOps security analyst.
 Your task is to extract factual security context from the provided vulnerability data WITHOUT making final judgments.
 
@@ -19,26 +25,33 @@ Your task is to extract factual security context from the provided vulnerability
 """
     sys_msg = SystemMessage(content=sys_prompt)
     
-    # 2. Human Prompt based on the tool
+    # 1. SAST (Semgrep, SonarQube 등) 처리
     if scan_tool == "SAST":
         prompt = f"""Extract security facts from the following SAST finding and its source code chunk:
 {state['vuln_data']}
 Focus heavily on identifying security decorators, sanitization logic, and the return type."""
-    
-    elif scan_tool == "DAST":
-        prompt = f"""Extract security facts from the following DAST alert:
-{state['vuln_data']}
-Focus on the affected URL, HTTP method, attack payload (if any), and how the server responded."""
-    
+        structured_llm = llm.with_structured_output(SastFacts)
+        
+    # 2. Trivy (SCA / Container) 처리
     elif scan_tool == "Trivy":
         prompt = f"""Extract security facts from the following Dependency/Container vulnerability:
 {state['vuln_data']}
-Focus on whether the vulnerable component is actively utilized within the given system context."""
-    else:
-        prompt = f"Extract security facts for: {state['vuln_data']}"
+Focus on framework default configurations and architectural isolation that might mitigate this CVE."""
+        structured_llm = llm.with_structured_output(TrivyFacts)
         
-    # 구조화된 출력 강제
-    structured_llm = llm.with_structured_output(ExtractedFacts)
+    # 3. DAST (ZAP 등) 처리
+    elif scan_tool == "DAST":
+        prompt = f"""Extract security facts from the following DAST alert:
+{state['vuln_data']}
+Focus on safe response behaviors (e.g., error handling), missing headers, and payload reflection."""
+        structured_llm = llm.with_structured_output(DastFacts)
+        
+    # 4. Fallback (기본 예외 처리)
+    else:
+        prompt = f"Extract facts for: {state['vuln_data']}"
+        structured_llm = llm.with_structured_output(SastFacts)
+
+    # 지정된 스키마 출력
     extracted = structured_llm.invoke([sys_msg, HumanMessage(content=prompt)])
     
     return {"extracted_facts": extracted}
@@ -49,21 +62,29 @@ Focus on whether the vulnerable component is actively utilized within the given 
 def node_phase2_triage(state: SecurityState) -> dict:
     # 1. System Prompt
     sys_msg = SystemMessage(
-        content="You are a strict and logical security triager. Your only job is to determine if a reported vulnerability is a False Positive (safe) or a True Positive."
+        content="You are a highly skeptical senior security engineer. You operate on a 'Zero Trust' principle regarding automated scanner outputs. You know that SAST/DAST scanners lack architectural context and produce a massive amount of False Positives. Your default stance is to distrust the scanner's claims until proven otherwise by concrete evidence."
     )
     
     # 2. Human Prompt
-    prompt = f"""Based on the extracted facts, carefully determine if this vulnerability is a False Positive.
+    prompt = f"""Based on the extracted facts and system context, independently determine if this vulnerability is a False Positive. Do NOT blindly trust the scanner's rule description or severity.
 
 - Scan Tool: {state['scan_tool']}
+- System Context: {state['system_context']}
 - Original Vulnerability Data: {state['vuln_data']}
 - Phase 1 Extracted Facts: {state['extracted_facts']}
 
-[Triage Guidelines]
-1. If the 'sanitization_logic' effectively mitigates the issue (e.g., type casting, escaping), mark as False Positive.
-2. If the code is clearly for testing, dummy data, or timing attack prevention (e.g., hardcoded dummy bcrypt hash), mark as False Positive.
-3. For DAST, if the server responded safely (e.g., 403 Forbidden or handled 500 error without leaking sensitive data), mark as False Positive.
-4. Otherwise, mark as True Positive.
+[Zero-Trust Triage Guidelines]
+1. Burden of Proof: Assume the finding is a False Positive UNLESS the extracted facts show a clear, exploitable path for an external attacker.
+2. Architectural Norms: Standard operational configurations or defensive implementations are NOT vulnerabilities. Mark them as False Positives.
+3. The "Framework Shield" Rule: 
+   - If the higher-level architecture or framework completely terminates, sanitizes, or blocks the malicious payload before it reaches the vulnerable underlying component, classify it as a False Positive.
+   - HOWEVER, if the higher-level framework merely restricts parameters but still passes the payload through to the vulnerable parser, it MUST be classified as a True Positive.
+   - Network isolation or internal environment status do not make a technically reachable vulnerability a False Positive.
+4. Rely ONLY on the [Network & Security Perimeter] provided in the System Context. Do not presuppose absent WAFs or missing proxies.
+5. Confidence Scoring: 
+   - 90-100: Absolute certainty based on clear code evidence or standard architectural norms.
+   - 70-89: High probability based on logical deduction.
+   - Below 70: Ambiguous context requiring human review.
 """
     
     structured_llm = llm.with_structured_output(TriageResult)
@@ -107,7 +128,30 @@ def node_phase3_assessor(state: SecurityState) -> dict:
 # ==========================================
 def node_phase4_reporter(state: SecurityState) -> dict:
     triage = state["triage_result"]
-    
+    scan_tool = state.get("scan_tool", "Unknown")
+    vuln_data = state.get("vuln_data", {})
+
+    target = "Unknown Target"
+    vuln_name = "Unknown Vuln"
+
+    if scan_tool == "SAST":
+        target = vuln_data.get("file_path", "Unknown Target")
+        vuln_name = vuln_data.get("rule_id", "Unknown Vuln")
+        
+    elif scan_tool == "Trivy":
+        pkg_name = vuln_data.get("package_name", "Unknown Pkg")
+        target = f"{vuln_data.get('target', 'Unknown')} ({pkg_name})"
+        vuln_name = vuln_data.get("cve_id", "Unknown CVE")
+        
+    elif scan_tool == "DAST":
+        affected = vuln_data.get("affected_targets", [])
+        # 여러 URL이 있을 경우 첫 번째 URL 외 N건으로 표기
+        if affected:
+            target = affected[0].get("url", "Unknown URL")
+            if len(affected) > 1:
+                target += f" (and {len(affected)-1} more)"
+        vuln_name = vuln_data.get("alert_name", "Unknown Alert")
+
     sys_msg = SystemMessage(
         content="You are a technical writer generating concise Markdown security reports. Output ONLY the raw Markdown text. Do NOT include greetings, conversational padding, or markdown code blocks (```markdown)."
     )
@@ -115,24 +159,40 @@ def node_phase4_reporter(state: SecurityState) -> dict:
     if triage.is_false_positive:
         # 오탐일 경우의 리포트 프롬프트
         prompt = f"""Generate a short Markdown report for a False Positive finding.
-- Target: {state.get('vuln_data', {}).get('file_path', 'Unknown Target')}
-- Rule/Vuln: {state.get('vuln_data', {}).get('rule_id', 'Unknown Vuln')}
+- Target: {target}
+- Rule/Vuln: {vuln_name}
 - Reason for False Positive: {triage.fp_reason}
+- Confidence: {triage.confidence_score}%
 
 Format Requirements:
-Use a header like `### 🛡️ [False Positive] <Rule Name>` and briefly state the reason."""
+You MUST strictly follow this exact markdown structure below without omitting any fields:
+
+### 🛡️ [False Positive] {vuln_name} (Confidence: {triage.confidence_score}%)
+
+**Target:** {target}  
+**Reason:** <Refine and write the reason for the false positive here>
+"""
     else:
         # 정탐일 경우의 리포트 프롬프트
         risk = state["risk_assessment"]
         prompt = f"""Generate a concise Markdown report for a True Positive vulnerability.
-- Target: {state.get('vuln_data', {}).get('file_path', 'Unknown Target')}
-- Rule/Vuln: {state.get('vuln_data', {}).get('rule_id', 'Unknown Vuln')}
+- Target: {target}
+- Rule/Vuln: {vuln_name}
 - Final Risk: {risk.final_risk}
 - Impact Reason: {risk.impact_reason}
 - Mitigation Context: {state['extracted_facts']}
+- Confidence: {triage.confidence_score}%
 
 Format Requirements:
-Use a header like `### 🚨 [True Positive - {risk.final_risk}] <Rule Name>`, followed by 'Context', 'Impact', and 'Suggested Action' bullet points."""
+You MUST strictly follow this exact markdown structure below without omitting any fields:
+
+### 🚨 [True Positive - {risk.final_risk}] {vuln_name} (Confidence: {triage.confidence_score}%)
+
+- **Target:** {target}
+- **Context:** <Summarize the vulnerability and mitigation context>
+- **Impact:** <State the impact reason and business risk>
+- **Suggested Action:** <Provide a concise, actionable remediation step>
+"""
 
     # 리포트는 구조화된 객체가 아니라 순수 문자열(Markdown)이므로 일반 invoke 사용
     response = llm.invoke([sys_msg, HumanMessage(content=prompt)])

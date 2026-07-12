@@ -11,6 +11,21 @@ TRIVY_JSON = Path("reports/trivy/trivy_for_llm.json")
 ZAP_JSON = Path("reports/zap/zap_for_llm.json")
 FINAL_MD = Path("reports/summary/ai_final_report.md")
 
+ai_records = []
+
+def _record(scan_tool, vuln, final_state):
+    triage = final_state.get("triage_result")
+    risk = final_state.get("risk_assessment")
+    ai_records.append({
+        "scan_tool": scan_tool,
+        "rule_id": vuln.get("rule_id") or vuln.get("cve_id") or vuln.get("alert_name"),
+        "cwe": vuln.get("cwe") or vuln.get("cwe_id"),
+        "file_path": vuln.get("file_path"),
+        "line_number": vuln.get("line_number"),
+        "triage": triage.model_dump() if triage else {},
+        "assessment": risk.model_dump() if risk else {},
+    })
+
 def run_agent_for_finding(scan_tool: str, vuln_data: dict, sys_context: str) -> str:
     """단일 취약점 데이터를 LangGraph에 통과시키고 마크다운 결과를 받습니다."""
     initial_state = {
@@ -21,7 +36,7 @@ def run_agent_for_finding(scan_tool: str, vuln_data: dict, sys_context: str) -> 
     
     # LangGraph 실행
     final_state = security_pipeline.invoke(initial_state)
-    return final_state["final_report_md"]
+    return final_state
 
 def get_infrastructure_context(root_dir: str) -> str:
     """Trivy 분석에 필요한 핵심 설정 파일들의 내용을 묶어서 반환합니다."""
@@ -56,7 +71,7 @@ def main():
         # 1. SAST (Semgrep) 처리
         # ==========================================
         if SEMGREP_JSON.exists():
-            with open(SEMGREP_JSON, "r") as jf:
+            with open(SEMGREP_JSON, "r", encoding="utf-8") as jf:
                 sast_findings = json.load(jf)
             
             if sast_findings:
@@ -71,8 +86,9 @@ def main():
                     if line_num > 0 and vuln.get("file_path"):
                         code_chunk = get_code_snippet(vuln["file_path"], line_num)
                         vuln["raw_code_chunk"] = code_chunk
-                    
-                    report_md = run_agent_for_finding("SAST", vuln, sys_context)
+                        
+                    final_state = run_agent_for_finding("SAST", vuln, sys_context) 
+                    report_md = final_state["final_report_md"]
                     f.write(report_md + "\n\n")
                     time.sleep(0.5)
                     
@@ -80,7 +96,7 @@ def main():
         # 2. Dependency (Trivy) 처리
         # ==========================================
         if TRIVY_JSON.exists():
-            with open(TRIVY_JSON, "r") as jf:
+            with open(TRIVY_JSON, "r", encoding="utf-8") as jf:
                 trivy_findings = json.load(jf)
             
             if trivy_findings:
@@ -89,7 +105,9 @@ def main():
                 
                 for vuln in trivy_findings:
                     vuln["infrastructure_files"] = infra_context 
-                    report_md = run_agent_for_finding("Trivy", vuln, sys_context)
+                    final_state = run_agent_for_finding("Trivy", vuln, sys_context)
+                    report_md = final_state["final_report_md"]
+                    _record("Trivy", vuln, final_state)
                     f.write(report_md + "\n\n")
                     time.sleep(0.5)
                     
@@ -97,7 +115,7 @@ def main():
         # 3. DAST (ZAP) 처리
         # ========================================== 
         if ZAP_JSON.exists():
-            with open(ZAP_JSON, "r") as jf:
+            with open(ZAP_JSON, "r", encoding="utf-8") as jf:
                 zap_findings = json.load(jf)
             
             if zap_findings:
@@ -105,9 +123,14 @@ def main():
                 f.write("---\n## 3. DAST Findings (Dynamic Analysis)\n\n")
                 
                 for vuln in zap_findings:
-                    report_md = run_agent_for_finding("DAST", vuln, sys_context)
+                    final_state = run_agent_for_finding("DAST", vuln, sys_context)
+                    report_md = final_state["final_report_md"]
+                    _record("DAST", vuln, final_state)
                     f.write(report_md + "\n\n")
                     time.sleep(0.5)
+
+    (FINAL_MD.parent / "ai_findings.json").write_text(
+        json.dumps(ai_records, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"[+] AI Analysis Complete! Final report saved to: {FINAL_MD}")
 

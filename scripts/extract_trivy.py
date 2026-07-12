@@ -9,7 +9,7 @@ print("Extracting Trivy vulnerabilities for LLM analysis...")
 extracted_vulns = []
 
 if TRIVY_PATH.exists():
-    with open(TRIVY_PATH) as f:
+    with open(TRIVY_PATH, encoding="utf-8") as f:
         trivy_data = json.load(f)
 
     for result in trivy_data.get("Results", []):

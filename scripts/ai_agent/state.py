@@ -2,9 +2,9 @@ from typing import TypedDict, Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
 # ==========================================
-# 1. Phase 1 (Extractor) Output Schema
+# 1-A. Phase 1 Output Schema for SAST (Semgrep, SonarQube, etc.)
 # ==========================================
-class ExtractedFacts(BaseModel):
+class SastFacts(BaseModel):
     decorators: List[str] = Field(
         default_factory=list, 
         description="List of authentication, authorization, or routing decorators applied to the target function/class."
@@ -27,14 +27,51 @@ class ExtractedFacts(BaseModel):
     )
 
 # ==========================================
+# 1-B. Phase 1 Output Schema for SCA/Container (Trivy)
+# ==========================================
+class TrivyFacts(BaseModel):
+    framework_defaults: List[str] = Field(
+        default_factory=list,
+        description="Secure defaults provided by the framework (e.g., Spring Boot default configurations) that implicitly mitigate the vulnerability."
+    )
+    architectural_isolation: List[str] = Field(
+        default_factory=list,
+        description="Network isolation, container constraints, or environment settings that block the attack path (e.g., internal network only, no PKCS#11 hardware)."
+    )
+    usage_context: str = Field(
+        default="Unknown",
+        description="How the vulnerable package is used in the current project (e.g., development only, inactive embedded component, active core logic)."
+    )
+
+# ==========================================
+# 1-C. Phase 1 Output Schema for DAST (ZAP, BurpSuite)
+# ==========================================
+class DastFacts(BaseModel):
+    safe_response_behavior: List[str] = Field(
+        default_factory=list,
+        description="Evidence of safe server handling (e.g., 403 Forbidden, safe 500 error without leaking stack traces)."
+    )
+    missing_security_headers: List[str] = Field(
+        default_factory=list,
+        description="List of missing security headers flagged by the scanner (e.g., CSP, COEP)."
+    )
+    reflected_payloads: str = Field(
+        default="None",
+        description="Details if the injected malicious payload was actually reflected in the server's response body."
+    )
+
+# ==========================================
 # 2. Phase 2 (Triage) Output Schema
 # ==========================================
 class TriageResult(BaseModel):
     is_false_positive: bool = Field(
-        description="True if the vulnerability is deemed a false positive (safe) based on the extracted facts and mitigations. False if it is a true positive."
+        description="True if the vulnerability is deemed a false positive (safe). False if it is a true positive."
     )
     fp_reason: str = Field(
         description="Clear and logical explanation for why this is considered a false positive or true positive."
+    )
+    confidence_score: int = Field(
+        description="Confidence level of your decision, from 0 to 100. Use 90-100 for absolute certainty based on hard facts, 70-89 for high probability, and below 70 if the context is ambiguous."
     )
 
 # ==========================================

@@ -31,6 +31,12 @@ def generate_system_context(root_dir: str = ".") -> str:
 - Core Tech Stack: Java 21, Spring Boot 3.3.5, MyBatis, JJWT, Vanilla JS
 - Database: SQLite
 
+[Network & Security Perimeter]
+1. Network Exposure: Internal development/testing environment. NOT directly exposed to the public internet.
+2. Edge Proxy: All incoming HTTP/HTTPS traffic is terminated by an Nginx reverse proxy. The Spring Boot application does NOT receive direct internet traffic.
+3. WAF: No explicit WAF is currently deployed.
+
+[Directory Tree]
 {tree_str}
 """
 

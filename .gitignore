@@ -50,3 +50,6 @@ ir-automation/logs/*
 !ir-automation/logs/.gitkeep
 ir-automation/*.db
 ir-automation/**/__pycache__/
+
+# ── 리포트 파일──────────────────────────────────────────────
+reports/
