@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from llm.provider import make_chat_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 from state import SastFacts, TrivyFacts, DastFacts, TriageResult, RiskAssessment, SecurityState
 
@@ -8,7 +8,7 @@ from state import SastFacts, TrivyFacts, DastFacts, TriageResult, RiskAssessment
     api_key="ollama",
     temperature=0,
 )"""
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = make_chat_llm(temperature=0) 
 
 # ==========================================
 # [Node 1] Phase 1: Information Extractor
