@@ -106,6 +106,16 @@ SCRIPTS: list[dict] = [
         "message": "대량 데이터 수집 — 단일 응답 규모 제한(row-cap) 우회 시도",
     },
     {
+        "script": "bruteforce_attack.py",
+        "auth": True,
+        "attack_type": "BRUTEFORCE_ATTEMPT",
+        "severity": "HIGH",
+        "cwe": "307",
+        "endpoint": "/api/v1/auth/login",
+        "evidence": "공통 취약 패스워드 15회 연속 시도",
+        "message": "Bruteforce — 연속 로그인 시도로 계정 잠금 우회 시도",
+    },
+    {
         "script": "anomaly_attack.py",
         "auth": False,
         "attack_type": "ANOMALY_SCAN",
