@@ -58,10 +58,10 @@ def get_infrastructure_context(root_dir: str) -> str:
 
 def main():
     print("[*] Starting AI DevSecOps Pipeline...")
-    sys_context = generate_system_context("../../") # 프로젝트 루트 경로
-    infra_context = get_infrastructure_context("../../")
+    project_root = str(Path(__file__).resolve().parent.parent.parent) # 프로젝트 루트 경로
     
-    FINAL_MD.parent.mkdir(parents=True, exist_ok=True)
+    sys_context = generate_system_context(project_root)
+    infra_context = get_infrastructure_context(project_root)
     
     with open(FINAL_MD, "w", encoding="utf-8") as f:
         f.write("# 🤖 AI DevSecOps Integrated Security Report\n\n")
