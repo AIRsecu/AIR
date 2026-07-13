@@ -1,0 +1,2 @@
+FROM qwen3.6:35B-A3B
+PARAMETER num_ctx 40000

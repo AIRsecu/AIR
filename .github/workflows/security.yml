@@ -13,7 +13,9 @@ on:
       - main
 
 jobs:
-  # 1. SAST 스캔 (병렬 실행)
+  # ==========================================
+  # 1. SAST 스캔
+  # ==========================================
   semgrep:
     runs-on: ubuntu-latest
     steps:
@@ -25,22 +27,31 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry & Dependencies
-        run: |
-          pip install poetry
-          poetry install --no-root
-
       - name: Create Report Directory
         run: mkdir -p reports/semgrep
 
-      - name: Run Semgrep Scan
-        # --error 제거, 취약점이 나와도 파이프라인이 멈추지 않도록 || true 추가
-        run: |
-          poetry run semgrep scan \
-            --config auto \
-            . \
-            --json \
-            --output reports/semgrep/semgrep.json || true 
+      # 러너에 Semgrep 설치
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # 타겟(Spring, MyBatis, JWT, JS) 최적화 룰 및 노이즈 제거 옵션 적용
+      - name: Run Semgrep Scan (Optimized for Java+JS)
+        run: >
+          semgrep scan 
+          --config "p/java" 
+          --config "p/jwt" 
+          --config "p/javascript" 
+          --config "p/owasp-top-ten" 
+          --config "p/secrets"
+          --exclude ".github/**" 
+          --exclude "docs/**" 
+          --exclude "frontend/css/**" 
+          --exclude "**/*.sql" 
+          --exclude "scripts/**" 
+          --exclude "policy/**" 
+          . 
+          --json 
+          --output reports/semgrep/semgrep.json || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
@@ -48,7 +59,9 @@ jobs:
           name: semgrep-results
           path: reports/semgrep/semgrep.json
 
-  # 2. 컨테이너 및 의존성 스캔 (병렬 실행)
+  # ==========================================
+  # 2. 컨테이너 및 의존성 스캔
+  # ==========================================
   trivy:
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +89,9 @@ jobs:
           name: trivy-results
           path: reports/trivy/trivy.json
 
-  # 3. DAST 스캔 (병렬 실행)
+  # ==========================================
+  # 3. DAST 스캔
+  # ==========================================
   zap:
     runs-on: ubuntu-latest
     env:
@@ -104,7 +119,9 @@ jobs:
           exit 1
       
       - name: Create Report Directory
-        run: mkdir -p reports/zap
+        run: |
+          mkdir -p reports/zap
+          chmod 777 reports/zap
 
       - name: Run ZAP Baseline Scan
         run: |
@@ -136,7 +153,9 @@ jobs:
           path: reports/zap/zap-report.json
           if-no-files-found: error
 
-  # 4. 결과 집계 및 보안 게이트 (위 3개가 모두 끝난 후 실행)
+  # ==========================================
+  # 4. 결과 집계 및 보안 게이트
+  # ==========================================
   summary:
     needs: [semgrep, trivy, zap]
     runs-on: ubuntu-latest
@@ -149,12 +168,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry & Dependencies
-        run: |
-          pip install poetry
-          poetry install --no-root
-
-      # 각 스캔 결과를 제 위치에 다운로드
+      # 1. 각 스캔 결과를 제 위치에 다운로드
       - name: Download Semgrep Report
         uses: actions/download-artifact@v4
         with:
@@ -173,22 +187,63 @@ jobs:
           name: zap-report
           path: reports/zap
 
-      - name: Verify ZAP Report
-        run: |
-          test -f reports/zap/zap-report.json
-
+      # 2. 기존 통계 Summary 생성
       - name: Generate Security Summary
         run: |
           mkdir -p reports/summary
-          poetry run python scripts/generate_summary.py
+          python scripts/generate_summary.py
 
-      - name: Upload Summary Report
+      # 3. LLM 전용 데이터 경량화 스크립트 실행
+      - name: Extract Reports for LLM
+        run: |
+          python scripts/extract_semgrep.py
+          python scripts/extract_trivy.py
+          python scripts/extract_zap.py
+
+      # 4. AI 에이전트 전용 독립 환경 구성 (scripts/ai_agent/requirements.txt 사용)
+      - name: Install AI Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/ai_agent/requirements.txt
+
+      # 5. LangGraph AI 에이전트 파이프라인 실행
+      - name: AI re-evaluation (provider seam)
+        env:
+          AIR_LLM_PROVIDER: ${{ vars.AIR_LLM_PROVIDER }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pip install -r scripts/ai_agent/requirements.txt
+          bash scripts/llm/run-ai.sh
+
+      # 6. 생성된 AI 마크다운 리포트를 GitHub Summary에 출력
+      - name: Publish AI Report to Job Summary
+        run: |
+          if [ -f reports/summary/ai_final_report.md ]; then
+            cat reports/summary/ai_final_report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 통합 리포트(스캔 + AI + 런타임 IR → 단일)
+      - run: python reports/contract/aggregate.py
+      - run: |
+          [ -f reports/summary/unified_report.md ] && \
+            cat reports/summary/unified_report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      # 7. 아티팩트 업로드
+      - name: Upload Integrated & AI Reports
         uses: actions/upload-artifact@v4
         with:
-          name: integrated-security-summary
-          path: reports/summary/sec-summary.json
+          name: integrated-security-reports
+          path: |
+            reports/summary/sec-summary.json
+            reports/summary/ai_final_report.md
+            reports/semgrep/semgrep_for_llm.json
+            reports/trivy/trivy_for_llm.json
+            reports/zap/zap_for_llm.json
 
-      # 여기서 최종적으로 합격/불합격 판정 후 exit 1 또는 exit 0을 반환
+      # 8. Security Gate 통제 로직
       - name: Run Security Gate
         continue-on-error: ${{ github.ref != 'refs/heads/main' }}
-        run: poetry run python policy/security_gate.py
+        run: python policy/security_gate.py
