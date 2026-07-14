@@ -12,6 +12,7 @@ def settings(tmp_path) -> Settings:
         discord_webhook_url=None,          # 알림 전송 안 함(네트워크 격리)
         block_mode="simulation",           # 실 IP 안 건드림
         incident_storage_path=tmp_path / "incidents",
+        incident_meta_path=tmp_path / "incident_meta",
         blocklist_path=tmp_path / "incidents" / "blocklist.json",
         default_block_duration=60,
         critical_block_duration=120,

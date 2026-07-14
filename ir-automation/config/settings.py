@@ -19,6 +19,11 @@ load_dotenv()
 _PLACEHOLDER_MARK = "["
 
 
+def is_placeholder(value: str | None) -> bool:
+    """env 값이 미치환 placeholder([...]) 인지 검사."""
+    return bool(value) and _PLACEHOLDER_MARK in value
+
+
 def _csv(name: str, default: str = "") -> list[str]:
     return [x.strip() for x in os.getenv(name, default).split(",") if x.strip()]
 
@@ -32,6 +37,11 @@ def _int(name: str, default: int) -> int:
 
 def _bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _default_meta_path() -> Path:
+    storage = Path(os.getenv("INCIDENT_STORAGE_PATH", "./incidents"))
+    return Path(os.getenv("INCIDENT_META_PATH", str(storage.parent / "incident_meta")))
 
 
 # 유효한 차단 모드. 기본 simulation — 실수로 실 IP 를 막지 않는다.
@@ -60,11 +70,17 @@ class Settings:
     discord_webhook_url: str | None = field(
         default_factory=lambda: os.getenv("DISCORD_WEBHOOK_URL")
     )
+    # CRITICAL 전용 웹훅(선택). 미설정 시 기본 URL 로 fallback.
+    discord_webhook_url_critical: str | None = field(
+        default_factory=lambda: os.getenv("DISCORD_WEBHOOK_URL_CRITICAL")
+    )
     # --- 로깅/스토리지 ---
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     incident_storage_path: Path = field(
         default_factory=lambda: Path(os.getenv("INCIDENT_STORAGE_PATH", "./incidents"))
     )
+    # 통계/인덱스 — incidents/ 와 형제 디렉터리 (recent() 오인 방지)
+    incident_meta_path: Path = field(default_factory=_default_meta_path)
     blocklist_path: Path = field(
         default_factory=lambda: Path(os.getenv("BLOCKLIST_PATH", "./incidents/blocklist.json"))
     )
@@ -95,6 +111,16 @@ class Settings:
     waf_ipset_id: str | None = field(default_factory=lambda: os.getenv("WAF_IPSET_ID"))
     waf_ipset_name: str | None = field(default_factory=lambda: os.getenv("WAF_IPSET_NAME"))
     waf_scope: str = field(default_factory=lambda: os.getenv("WAF_SCOPE", "REGIONAL"))
+    # --- 컨텍스트 스코어링 ---
+    # TODO(sync-with-backend): 서비스 TZ 팀원 최종 확인 필요
+    service_timezone: str = field(
+        default_factory=lambda: os.getenv("SERVICE_TIMEZONE", "Asia/Seoul")
+    )
+    night_hours_start: int = field(default_factory=lambda: _int("NIGHT_HOURS_START", 0))
+    night_hours_end: int = field(default_factory=lambda: _int("NIGHT_HOURS_END", 6))
+    recidivism_window_seconds: int = field(
+        default_factory=lambda: _int("RECIDIVISM_WINDOW_SECONDS", 600)
+    )
 
     def __post_init__(self) -> None:
         if self.block_mode not in BLOCK_MODES:
@@ -105,7 +131,7 @@ class Settings:
     @property
     def discord_enabled(self) -> bool:
         url = self.discord_webhook_url
-        return bool(url) and _PLACEHOLDER_MARK not in url
+        return bool(url) and not is_placeholder(url)
 
     def duration_for(self, severity: str) -> int:
         """등급별 차단 TTL(초). CRITICAL 은 더 길게(.env CRITICAL_BLOCK_DURATION)."""

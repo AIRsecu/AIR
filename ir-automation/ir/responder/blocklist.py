@@ -66,14 +66,16 @@ class BlockStore:
 
     def upsert(self, ip: str, *, reason: str, severity: str, mode: str,
                incident_id: str, ttl_seconds: int, now: float | None = None) -> tuple[BlockEntry, bool]:
-        """차단 등록/연장. 반환 (entry, is_new).
+        """차단 등록/재무장(rearm). 반환 (entry, is_new).
 
-        멱등성: 이미 활성 차단 중이면 새로 만들지 않고 만료시각을 연장 + hits 증가.
+        멱등성: 이미 활성 차단 중이면 새로 만들지 않고
+        만료시각을 새 TTL 로 재무장(덮어쓰기: ``expires_at = now + ttl_seconds``) + hits 증가.
+        남은 TTL 에 가산하지 않는다(누적 연장이 아님).
         """
         now = time.time() if now is None else now
         existing = self._entries.get(ip)
         if existing and existing.is_active(now):
-            existing.expires_at = now + ttl_seconds  # TTL 연장(더 길게 재무장)
+            existing.expires_at = now + ttl_seconds  # 재무장(rearm) — 남은 시간 무시하고 덮어쓰기
             existing.hits += 1
             existing.severity = severity  # 최신 등급 반영
             self._persist()
