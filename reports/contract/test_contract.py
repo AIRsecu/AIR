@@ -96,6 +96,47 @@ class AggregateTest(unittest.TestCase):
             self.assertIn(key, f)
 
 
+class TrivyLocationTest(unittest.TestCase):
+    """의존성 취약점 위치 회귀: 언어명 target('Java')이 위치를 덮으면 안 된다."""
+
+    def _where(self, finding_contract: dict) -> str:
+        loc = finding_contract.get("location") or {}
+        return loc.get("file") or loc.get("endpoint") or loc.get("url") or loc.get("package") or "-"
+
+    def test_language_target_does_not_pollute_location(self):
+        from adapters import from_trivy
+        # 이미지 스캔 jar 집계 → Target="Java" (언어명). 실제 위치는 패키지 좌표여야 한다.
+        item = {
+            "target": "Java", "cve_id": "CVE-2016-1000027", "severity": "CRITICAL",
+            "package_name": "org.springframework:spring-web", "installed_version": "5.3.20",
+            "fixed_version": "6.0.0", "title": "Spring deserialization",
+        }
+        f = from_trivy.to_findings([item])[0].to_contract()
+        self.assertNotEqual(self._where(f), "Java")          # ← 회귀: 과거 위치='Java'
+        self.assertEqual(f["location"].get("package"), "org.springframework:spring-web@5.3.20")
+
+    def test_pkg_path_becomes_file_when_present(self):
+        from adapters import from_trivy
+        item = {
+            "target": "Java", "cve_id": "CVE-2021-44228", "severity": "CRITICAL",
+            "package_name": "org.apache.logging.log4j:log4j-core", "installed_version": "2.14.1",
+            "pkg_path": "app/BOOT-INF/lib/log4j-core-2.14.1.jar",
+        }
+        f = from_trivy.to_findings([item])[0].to_contract()
+        self.assertEqual(f["location"].get("file"), "app/BOOT-INF/lib/log4j-core-2.14.1.jar")
+        self.assertEqual(self._where(f), "app/BOOT-INF/lib/log4j-core-2.14.1.jar")
+
+    def test_real_path_target_is_kept_as_file(self):
+        from adapters import from_trivy
+        # OS/파일 스캔 등 target 이 실제 경로면 그대로 file 로 인정한다.
+        item = {
+            "target": "pom.xml", "cve_id": "CVE-0000-0001", "severity": "HIGH",
+            "package_name": "com.example:lib", "installed_version": "1.0",
+        }
+        f = from_trivy.to_findings([item])[0].to_contract()
+        self.assertEqual(f["location"].get("file"), "pom.xml")
+
+
 class AiAdapterToleranceTest(unittest.TestCase):
     """Digrass 모델(model_dump)이 fp_reason/impact_reason 로 뱉어도 수용해야 한다."""
 
@@ -110,6 +151,35 @@ class AiAdapterToleranceTest(unittest.TestCase):
         self.assertFalse(f.verdict.is_false_positive)
         self.assertEqual(f.verdict.reason, "internet-facing")
         self.assertEqual(f.severity.value, "HIGH")
+
+
+class EnrichRobustnessTest(unittest.TestCase):
+    """ai_findings.json 이 없거나(무키/미배출) 형식이 어긋나도 통합이 죽으면 안 된다."""
+
+    def test_absent_ai_findings_leaves_findings_unchanged(self):
+        import tempfile
+        findings = aggregate.collect(SAMPLES)
+        before = len(findings)
+        with tempfile.TemporaryDirectory() as d:
+            # summary/ai_findings.json 이 없는 디렉터리 → 보강 없이 그대로 통과
+            out = aggregate.enrich_with_ai(findings, Path(d))
+        self.assertEqual(len(out), before)
+        self.assertTrue(all(f.verdict is None for f in out))
+
+    def test_malformed_ai_findings_is_ignored(self):
+        import json as _json
+        import tempfile
+        findings = aggregate.collect(SAMPLES)
+        before = len(findings)
+        with tempfile.TemporaryDirectory() as d:
+            summary = Path(d) / "summary"
+            summary.mkdir()
+            # list 가 아닌 형식(객체) → enrich_with_ai 가 방어적으로 무시해야 함
+            (summary / "ai_findings.json").write_text(
+                _json.dumps({"unexpected": "shape"}), encoding="utf-8"
+            )
+            out = aggregate.enrich_with_ai(findings, Path(d))
+        self.assertEqual(len(out), before)
 
 
 if __name__ == "__main__":
