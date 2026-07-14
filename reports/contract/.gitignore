@@ -1,5 +1,7 @@
 # 생성물 — 계약/어댑터 코드만 추적하고 통합 산출물은 제외
 samples/summary/unified_report.json
 samples/summary/unified_report.md
+samples/summary/sbom_normalized.json
+samples/summary/sbom.md
 __pycache__/
 *.pyc
