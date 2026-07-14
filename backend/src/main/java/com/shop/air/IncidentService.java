@@ -67,6 +67,8 @@ public class IncidentService {
                 .payload(truncate(payload))
                 .actionTaken(action)
                 .status("MITIGATED")
+                .severity(RiskScoring.severity(type))   // [A2] 탐지 시점 위험도 영속
+                .score(RiskScoring.score(type))
                 .build();
         incidentMapper.insert(inc);
 
