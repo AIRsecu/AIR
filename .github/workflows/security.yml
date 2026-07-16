@@ -95,9 +95,9 @@ jobs:
   zap:
     runs-on: ubuntu-latest
     env:
-      JWT_ACCESS_SECRET: ci-access-secret-32chars-minimum-padding-1234567890
-      JWT_REFRESH_SECRET: ci-refresh-secret-32chars-minimum-padding-1234567890
-      ADMIN_PASSWORD: ci-admin-password-1234!
+      JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.CI_JWT_REFRESH_SECRET }}
+      ADMIN_PASSWORD: ${{ secrets.CI_ADMIN_PASSWORD }}
       CORS_ORIGINS: http://localhost,http://127.0.0.1
     steps:
       - name: Checkout Repository
