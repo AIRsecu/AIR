@@ -44,6 +44,10 @@ dist/
 Thumbs.db
 desktop.ini
 
+# ── DAST 스캔 결과 ─────────────────────────────────────────
+dast/zap/reports/
+reports/dast/
+
 # ── IR Automation ──────────────────────────────────────────
 ir-automation/.env
 ir-automation/incidents/*
@@ -52,3 +56,6 @@ ir-automation/logs/*
 !ir-automation/logs/.gitkeep
 ir-automation/*.db
 ir-automation/**/__pycache__/
+
+# ── 리포트 파일──────────────────────────────────────────────
+reports/
