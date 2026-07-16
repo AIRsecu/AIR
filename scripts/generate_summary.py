@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 SEMGREP_PATH = Path("reports/semgrep/semgrep.json")
-TRIVY_PATH = Path("reports/trivy/trivy.json")
+TRIVY_DIR = Path("reports/trivy")
 ZAP_PATH = Path("reports/zap/zap-report.json")
 OUTPUT_PATH = Path("reports/summary/sec-summary.json")
 
@@ -24,8 +24,8 @@ if SEMGREP_PATH.exists():
         semgrep_data.get("results", [])
     )
 
-if TRIVY_PATH.exists():
-    with open(TRIVY_PATH) as f:
+for trivy_path in sorted(TRIVY_DIR.glob("*.json")):
+    with open(trivy_path) as f:
         trivy_data = json.load(f)
 
     for result in trivy_data.get("Results", []):
@@ -36,7 +36,6 @@ if TRIVY_PATH.exists():
                 summary["trivy_critical"] += 1
             elif severity == "HIGH":
                 summary["trivy_high"] += 1
-
 if ZAP_PATH.exists():
     with open(ZAP_PATH) as f:
         zap_data = json.load(f)

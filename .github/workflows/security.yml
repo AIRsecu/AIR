@@ -6,6 +6,7 @@ on:
       - dev
       - feature/**
       - feat/**
+      - main
       
   pull_request:
     branches:
@@ -26,7 +27,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+      
       - name: Create Report Directory
         run: mkdir -p reports/semgrep
 
@@ -34,24 +35,8 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep
 
-      # 타겟(Spring, MyBatis, JWT, JS) 최적화 룰 및 노이즈 제거 옵션 적용
-      - name: Run Semgrep Scan (Optimized for Java+JS)
-        run: >
-          semgrep scan 
-          --config "p/java" 
-          --config "p/jwt" 
-          --config "p/javascript" 
-          --config "p/owasp-top-ten" 
-          --config "p/secrets"
-          --exclude ".github/**" 
-          --exclude "docs/**" 
-          --exclude "frontend/css/**" 
-          --exclude "**/*.sql" 
-          --exclude "scripts/**" 
-          --exclude "policy/**" 
-          . 
-          --json 
-          --output reports/semgrep/semgrep.json || true
+      - name: Run Semgrep Scan
+        run: bash scripts/security/run-semgrep.sh
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
@@ -71,23 +56,14 @@ jobs:
       - name: Create Report Directory
         run: mkdir -p reports/trivy
 
-      - name: Build Docker Image
-        run: docker build -t air-app:latest ./backend 
-
       - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: air-app:latest
-          format: json
-          output: reports/trivy/trivy.json
-          severity: CRITICAL,HIGH
-          exit-code: 0
+        run: bash scripts/security/run-trivy.sh
 
-      - name: Upload Trivy Results
+      - name: Upload security reports
         uses: actions/upload-artifact@v4
         with:
           name: trivy-results
-          path: reports/trivy/trivy.json
+          path: reports/trivy/
 
   # ==========================================
   # 3. DAST 스캔
@@ -102,21 +78,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Start Application
-        run: docker compose up -d
-
-      - name: Wait for Application
-        run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost/healthz; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose ps
-          docker compose logs
-          exit 1
       
       - name: Create Report Directory
         run: |
@@ -124,21 +85,14 @@ jobs:
           chmod 777 reports/zap
 
       - name: Run ZAP Baseline Scan
-        run: |
-          docker run --rm \
-            --add-host=host.docker.internal:host-gateway \
-            -v $(pwd)/reports/zap:/zap/wrk \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-            -t http://host.docker.internal \
-            -r zap-report.html \
-            -J zap-report.json || true
+        run: bash scripts/security/run-zap.sh
+        continue-on-error: true    # 실패 시 workflow 실행(추후 false로 변경 필요)
 
-      - name: Ensure ZAP Report Exists
+      - name: Check ZAP alert severity
+        if: always()    # 스캔 성공/실패와 관계없이 리포트 검증
         run: |
-          if [ ! -f reports/zap/zap-report.json ]; then
-            echo '{"site":[]}' > reports/zap/zap-report.json
-          fi
+          jq '[.site[]?.alerts[]? | select(.riskcode !="0")] | length' \
+          reports/zap/zap-report.json || echo "0"
 
       - name: Debug Report Files
         run: ls -al reports/zap

@@ -1,6 +1,7 @@
 # ── 비밀/환경 (절대 커밋 금지) ─────────────────────────────
 .env
 .env.local
+.env.example
 *.pem
 *.key
 secrets/
@@ -18,6 +19,7 @@ build/
 *.class
 *.jar
 !**/maven-wrapper.jar
+reports/
 
 # ── 로그 ───────────────────────────────────────────────────
 *.log
