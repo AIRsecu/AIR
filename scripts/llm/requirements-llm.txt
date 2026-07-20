@@ -4,7 +4,9 @@
 #
 #   pip install -r scripts/llm/requirements-llm.txt
 
-# langchain-openai>=0.1.0        # OpenAI  (이미 ai_agent/requirements.txt 에 있음)
+# langchain-openai>=0.1.0        # OpenAI + Ollama(로컬, OpenAI 호환)  ← ai_agent/requirements.txt 에 이미 있음
+#                                # 로컬(Ollama)은 별도 파이썬 패키지 불필요. Ollama 런타임만 설치:
+#                                #   ollama pull qwen2.5-coder:7b  &&  AIR_LLM_PROVIDER=ollama
 langchain-groq>=0.1.0            # Groq    (무료·빠름, GROQ_API_KEY)
 langchain-google-genai>=1.0.0   # Gemini  (무료 티어, GEMINI_API_KEY)
 langchain-anthropic>=0.1.0      # Claude  (ANTHROPIC_API_KEY)

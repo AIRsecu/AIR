@@ -15,7 +15,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 from llm import provider  # noqa: E402
 
-_KEYS = ["AIR_LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY"]
+_KEYS = [
+    "AIR_LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY",
+    "OPENAI_API_KEY", "OLLAMA_MODEL", "OLLAMA_BASE_URL",
+]
 
 
 class DetectProviderTest(unittest.TestCase):
@@ -59,6 +62,32 @@ class DetectProviderTest(unittest.TestCase):
         finally:
             os.environ.pop("GROQ_MODEL", None)
         self.assertEqual(provider.model_name("openai"), provider.DEFAULT_MODEL["openai"])
+
+    def test_forced_ollama_needs_no_key(self):
+        os.environ["AIR_LLM_PROVIDER"] = "ollama"
+        self.assertEqual(provider.detect_provider(), "ollama")
+
+    def test_forced_local_alias(self):
+        os.environ["AIR_LLM_PROVIDER"] = "local"
+        self.assertEqual(provider.detect_provider(), "ollama")
+
+    def test_ollama_config_preferred_over_cloud_key(self):
+        # 로컬이 설정돼 있으면(모델/엔드포인트) 클라우드 키가 있어도 로컬을 택한다.
+        os.environ["OPENAI_API_KEY"] = "y"
+        os.environ["OLLAMA_MODEL"] = "qwen2.5-coder:7b"
+        self.assertEqual(provider.detect_provider(), "ollama")
+
+    def test_forced_cloud_wins_over_ollama_config(self):
+        # AIR_LLM_PROVIDER 명시 강제는 로컬 자동감지보다 우선.
+        os.environ["OLLAMA_MODEL"] = "qwen2.5-coder:7b"
+        os.environ["GROQ_API_KEY"] = "z"
+        os.environ["AIR_LLM_PROVIDER"] = "groq"
+        self.assertEqual(provider.detect_provider(), "groq")
+
+    def test_ollama_default_and_override_model(self):
+        self.assertEqual(provider.model_name("ollama"), provider.DEFAULT_MODEL["ollama"])
+        os.environ["OLLAMA_MODEL"] = "deepseek-coder:6.7b"
+        self.assertEqual(provider.model_name("ollama"), "deepseek-coder:6.7b")
 
 
 class HeuristicValueTest(unittest.TestCase):

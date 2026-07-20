@@ -1,0 +1,32 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "metadata": {
+    "component": { "type": "application", "name": "air-app", "version": "latest" }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "org.yaml",
+      "name": "snakeyaml",
+      "version": "1.30",
+      "purl": "pkg:maven/org.yaml/snakeyaml@1.30",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }]
+    },
+    {
+      "type": "library",
+      "group": "org.springframework.boot",
+      "name": "spring-boot",
+      "version": "3.1.2",
+      "purl": "pkg:maven/org.springframework.boot/spring-boot@3.1.2",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }]
+    },
+    {
+      "type": "library",
+      "name": "lodash",
+      "version": "4.17.21",
+      "purl": "pkg:npm/lodash@4.17.21",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    }
+  ]
+}
