@@ -333,3 +333,171 @@ def test_find_lock_timeout_returns_empty(meta_dir: Path, monkeypatch, caplog):
     with caplog.at_level("WARNING", logger="ir.store.stats"):
         assert index.find(ip="1.2.3.4") == []
     assert "lock timeout" in caplog.text.lower() or "index lock timeout" in caplog.text
+
+
+# ── resilience / prune / tz fallback ─────────────────────────
+
+def test_record_survives_oserror(meta_dir: Path, monkeypatch):
+    """쓰기 실패해도 record() 는 raise 하지 않고 _error_count 만 증가."""
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul")
+
+    def _boom(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("ir.store.stats.atomic_write_json", _boom)
+    index.record(
+        incident_id="err-1",
+        attack_type="XSS_ATTEMPT",
+        client_ip="203.0.113.1",
+        occurred_at=datetime(2026, 7, 3, 10, 0, 0),
+    )
+    assert index._error_count == 1
+    assert index._skip_count == 0
+
+
+def test_tz_fallback_when_zoneinfo_fails(meta_dir: Path, monkeypatch):
+    """ZoneInfo 실패 시 UTC+9 고정 offset fallback."""
+    from datetime import timedelta, timezone as dt_tz
+    from zoneinfo import ZoneInfoNotFoundError
+
+    import ir.store.stats as stats_mod
+
+    def _raise(_name):
+        raise ZoneInfoNotFoundError("no tzdata")
+
+    monkeypatch.setattr(stats_mod, "ZoneInfo", _raise)
+    tz = stats_mod._get_tz("Asia/Seoul")
+    assert tz == dt_tz(timedelta(hours=9))
+
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul")
+    # naive 14:00 → UTC+9 로 간주 → hour 14
+    index.record(
+        incident_id="tz-fb-1",
+        attack_type="ANOMALY_SCAN",
+        client_ip="203.0.113.1",
+        occurred_at=datetime(2026, 7, 3, 14, 0, 0),
+    )
+    assert index.stats().by_hour["14"] == 1
+
+
+def test_ip_pruning_when_over_limit(meta_dir: Path):
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul", max_ip_keys=3)
+    # count=1 IP 세 개 + count=5 고빈도 IP 하나 → 총 4키 → 1개 prune
+    for i in range(3):
+        index.record(
+            incident_id=f"low-{i}",
+            attack_type="ANOMALY_SCAN",
+            client_ip=f"198.51.100.{i}",
+            occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+        )
+    for i in range(5):
+        index.record(
+            incident_id=f"hot-{i}",
+            attack_type="SQLI_ATTEMPT",
+            client_ip="203.0.113.50",
+            occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+        )
+    import json
+    raw = json.loads((meta_dir / "stats.json").read_text(encoding="utf-8"))
+    assert len(raw["_ip_counts"]) == 3
+    assert raw["_ip_counts"]["203.0.113.50"] == 5
+
+
+def test_index_by_ip_synced_with_pruning(meta_dir: Path):
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul", max_ip_keys=2)
+    index.record(
+        incident_id="a",
+        attack_type="XSS_ATTEMPT",
+        client_ip="198.51.100.1",
+        occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+    )
+    index.record(
+        incident_id="b",
+        attack_type="XSS_ATTEMPT",
+        client_ip="198.51.100.2",
+        occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+    )
+    # 세 번째 유니크 IP → 상한 초과, count=1 중 하나 prune
+    index.record(
+        incident_id="c",
+        attack_type="XSS_ATTEMPT",
+        client_ip="198.51.100.3",
+        occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+    )
+    import json
+    counts = json.loads((meta_dir / "stats.json").read_text(encoding="utf-8"))["_ip_counts"]
+    by_ip = json.loads((meta_dir / "index_by_ip.json").read_text(encoding="utf-8"))
+    assert len(counts) == 2
+    assert set(counts.keys()) == set(by_ip.keys())
+
+
+def test_skip_error_counters_incremented(meta_dir: Path, monkeypatch):
+    import ir.store._atomic as atomic
+
+    monkeypatch.setattr(atomic, "_HAS_FLOCK", True)
+    monkeypatch.setattr(atomic, "_LOCK_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(atomic, "_LOCK_RETRY_INTERVAL", 0.03)
+
+    class _FakeFcntl:
+        LOCK_EX = 2
+        LOCK_NB = 4
+        LOCK_UN = 8
+
+        @staticmethod
+        def flock(fd, op):
+            if op == _FakeFcntl.LOCK_UN:
+                return
+            raise BlockingIOError()
+
+    monkeypatch.setattr(atomic, "fcntl", _FakeFcntl)
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul")
+    index.record(
+        incident_id="skip-1",
+        attack_type="XSS_ATTEMPT",
+        client_ip="203.0.113.1",
+        occurred_at=datetime(2026, 7, 3, 10, 0, 0),
+    )
+    assert index._skip_count == 1
+    assert index._error_count == 0
+
+    # OSError 경로
+    index2 = StatsIndex(meta_dir, timezone="Asia/Seoul")
+    monkeypatch.setattr(atomic, "_HAS_FLOCK", False)
+
+    def _boom(*_a, **_k):
+        raise OSError("fail")
+
+    monkeypatch.setattr("ir.store.stats.atomic_write_json", _boom)
+    index2.record(
+        incident_id="err-2",
+        attack_type="XSS_ATTEMPT",
+        client_ip="203.0.113.2",
+        occurred_at=datetime(2026, 7, 3, 10, 0, 0),
+    )
+    assert index2._error_count == 1
+
+
+def test_top_ips_still_correct_after_pruning(meta_dir: Path):
+    index = StatsIndex(meta_dir, timezone="Asia/Seoul", max_ip_keys=5, top_ips_n=3)
+    # 고빈도 IP 3개 + 저빈도 3개 → prune 후 top_ips 는 고빈도 유지
+    for n, ip in [(10, "203.0.113.1"), (8, "203.0.113.2"), (6, "203.0.113.3")]:
+        for i in range(n):
+            index.record(
+                incident_id=f"hot-{ip}-{i}",
+                attack_type="SQLI_ATTEMPT",
+                client_ip=ip,
+                occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+            )
+    for i in range(3):
+        index.record(
+            incident_id=f"low-{i}",
+            attack_type="ANOMALY_SCAN",
+            client_ip=f"198.51.100.{i}",
+            occurred_at=datetime(2026, 7, 3, 12, 0, 0),
+        )
+    top = index.stats().top_ips
+    assert len(top) == 3
+    assert [t["ip"] for t in top] == ["203.0.113.1", "203.0.113.2", "203.0.113.3"]
+    import json
+    raw = json.loads((meta_dir / "stats.json").read_text(encoding="utf-8"))
+    assert len(raw["_ip_counts"]) == 5
