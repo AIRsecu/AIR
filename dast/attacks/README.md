@@ -22,6 +22,7 @@ AIR vuln-lab(`feature/air-defense`, `:8081`) 대상 취약점 유형별 공격 �
 | `upload_attack.py` | 파일 업로드 (위험 확장자·경로조작·LFI) | `POST /uploads`, `GET /uploads/download` | `upload.file-guard` |
 | `anomaly_attack.py` | 이상탐지 (4xx Scan) | `GET /no-such-endpoint` | `anomaly.detection` + `air.shield` |
 | `rowcap_attack.py` | 대량 데이터 수집 | `GET /products` | `invariant.row-cap` |
+| `bruteforce_attack.py` | Bruteforce Login | `POST /auth/login` | IP 기반 잠금 (AuthService) |
 
 엔드포인트 공통 prefix: `/api/v1/tenants/{tenantId}/...`
 
@@ -53,6 +54,10 @@ poetry run python dast/run_all.py --base http://localhost:8081 --admin-user admi
 - **`upload_attack.py` VULNERABLE 시연** — `air.detection` 외에 `upload.file-guard`도 비활성화해야 한다. 방어 시연 중 autoDetect가 `upload.file-guard`를 자동으로 ON하기 때문이다.
 - **`anomaly_attack.py` DEFENDED 시연 후** — `air.shield`가 자동 활성화되므로 복원 시 비활성화한다.
 - **`rowcap_attack.py`** — 로컬 vuln-lab 전용. 실행 후 상품 250개가 DB에 잔류하며, API 삭제는 `ransom.massdelete-guard`를 트리거하므로 Docker 재시작으로 초기화한다.
+  ```powershell
+  docker compose -p airlab -f docker-compose.lab.yml restart
+  ```
+- **`bruteforce_attack.py` 실행 후** — IP 잠금(5분)이 활성화되어 같은 머신에서 이후 5분간 모든 로그인 시도가 차단된다. `run_all.py` 재실행이 필요하면 Docker를 재시작한다.
   ```powershell
   docker compose -p airlab -f docker-compose.lab.yml restart
   ```
