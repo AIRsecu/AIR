@@ -66,7 +66,8 @@ GET  /api/v1/air/rules  · POST · DELETE /rules/{id}   # 런타임 동적 룰
 
 ```bash
 # .env: JWT_ACCESS_SECRET / JWT_REFRESH_SECRET / ADMIN_PASSWORD (강하게)
-#       AIR_DISCORD_WEBHOOK=<디스코드 웹훅 URL>   (선택, IR 알림)
+#       AIR_DISCORD_WEBHOOK=<디스코드 웹훅 URL>       (선택, IR 알림)
+#       AIR_TRUSTED_PROXIES=<신뢰 프록시 CIDR,...>    (선택, 기본 루프백+사설 — XFF 실IP 채택 대역)
 docker-compose -p airlab -f docker-compose.lab.yml up -d --build
 # 접속: http://<호스트>:8081/     로그인: super_admin 계정(.env 의 ADMIN_USERNAME / ADMIN_PASSWORD)
 ```
@@ -112,6 +113,12 @@ docker-compose -p airlab -f docker-compose.lab.yml up -d --build
   → 정직한 시연: web 응답 JSON 에 payload 가 **미이스케이프**로 저장/반사됨을(defense 는 이스케이프됨) 보여줘
   코드계층 취약/방어를 대비. 굳이 alert 를 띄우려면 CSP 밖 컨텍스트(다운로드한 파일 `file://` 또는 CSP 완화
   데모 페이지)에서 확인하고, 이는 CSP 라는 별도 방어층 밖의 영향임을 명시한다.
+- **방어기 자체 하드닝(런타임 안전성, R1~R3)**: `DetectionFilter` 는 방어기가 먼저 무너지지 않도록 —
+  (1) IP별 rate/격리 카운터 맵에 **상한(기본 5만)·만료 축출**을 두어 회전 IP 공격에도 메모리
+  무한증가(OOM)를 방지하고, (2) `X-Forwarded-For` 는 **신뢰 프록시(리버스프록시) 뒤에서만** 실IP로 채택하고
+  그 외에는 `remoteAddr` 를 사용해 **헤더 위조를 통한 레이트리밋·격리 우회를 차단**하며(신뢰 대역은
+  `AIR_TRUSTED_PROXIES`, 기본 루프백+RFC1918 사설), (3) 시그니처 정규식 스캔 입력을 **상한(64KB)으로 캡**해
+  대용량 입력에 의한 CPU 소모(경미 ReDoS 표면)를 제한한다.
 
 ## 브랜치 구도
 
