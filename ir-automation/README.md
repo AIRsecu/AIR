@@ -35,7 +35,21 @@
 - **저위험 skip**: LOW 등급은 기록/알림만, 네트워크 차단 안 함
 - **TTL 자동 해제**: 만료 IP 는 reconcile 시 활성목록에서 빠져 자동 해제(룰 무한누적 방지).
   이벤트 수신 시 + `RECONCILE_INTERVAL_SECONDS` 마다 주기적으로도 실행 → 트래픽이 끊겨도 제때 풀림.
-- **멱등성**: 이미 차단 중인 IP 는 재집행·재알림 없이 TTL 만 연장
+- **멱등성**: 이미 차단 중인 IP 는 재집행·재알림 없이 TTL 만 재무장(rearm)
+- **인덱스는 IP/type 당 최근 1000건 유지** (`incident_meta/`). 더 오래된 건
+  `incidents/<id>.json` 개별 조회는 가능하지만 `find()` 결과에는 안 나옴.
+  통계 `top_ips` 는 trim 과 무관한 `_ip_counts` 누적 카운터 기준(상위 20).
+
+### 인덱스 락 타임아웃 복구 (수동)
+
+`incident_meta/.lock` 획득이 2초 내 실패하면 해당 이벤트의 stats/index 갱신은 **skip** 됩니다.
+원본 `incidents/<id>.json` 은 이미 저장된 상태라 손실 없습니다.
+
+- `StatsIndex.__init__` 은 **경로만 설정**하며 `incidents/*.json` 을 재스캔하지 **않습니다**.
+- `incident_meta/` 를 지우고 재기동하면 **빈 인덱스**로 시작하며, 이후 `record()` 된 건만 반영됩니다.
+- 기존 json 자동 재인덱싱 / `rebuild` API 는 **없음** (후속 티켓).
+
+수동 절차: IR 정지 → `incident_meta/` 삭제 → 재기동 → (필요 시) 신규 이벤트로 인덱스 재적재.
 
 > nginx 모드 주의: `deny` 는 access 단계에서 평가되므로 `return`/정적 응답으로 조기 종료되는
 > 경로에는 적용되지 않는다. 실제 보호 대상인 `/api/` 프록시 트래픽에는 정상 적용됨. 또한 엣지
