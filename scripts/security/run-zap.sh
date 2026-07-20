@@ -23,17 +23,17 @@ if ! curl -fsS http://localhost/healthz >/dev/null; then
 fi
 
 # ===== 포트 명시 + 실패 감지 =====
-echo "Starting ZAP baseline scan against http://host.docker.internal:80..."
+echo "Starting ZAP Automation Framework scan against http://host.docker.internal:80..."
 
 ZAP_EXIT_CODE=0
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -v "$(pwd)/reports/zap:/zap/wrk" \
+  -v "$(pwd)/scripts/security:/zap/scripts:ro" \
   ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py \
-  -t http://host.docker.internal:80 \
-  -r zap-report.html \
-  -J zap-report.json || ZAP_EXIT_CODE=$?
+  zap.sh \
+  -cmd \
+  -autorun /zap/scripts/automation.yaml || ZAP_EXIT_CODE=$?
 
 # ZAP 실패 진단
 if [ ! -f reports/zap/zap-report.json ]; then
@@ -52,7 +52,5 @@ if command -v jq >/dev/null 2>&1; then
   alert_count=$(jq '[.site[]?.alerts[]? | select(.riskcode != "0")] | length' reports/zap/zap-report.json 2>/dev/null || echo "0")
   echo "✓ ZAP scan complete - detected ${alert_count} alerts (excluding informational)"
 fi
-
-sudo chown -R "$USER:$USER" reports/zap
 
 docker compose down || true

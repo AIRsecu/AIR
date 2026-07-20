@@ -1,0 +1,45 @@
+env:
+  contexts:
+    - name: shop
+      urls:
+        - http://host.docker.internal:80
+
+  parameters:
+    failOnError: true
+    progressToStdout: true
+
+jobs:
+  - type: spider
+    parameters:
+      context: shop
+      url: http://host.docker.internal:80
+      maxDuration: 2
+
+  - type: spiderAjax
+    parameters:
+      context: shop
+      url: http://host.docker.internal:80
+      maxDuration: 2
+      maxCrawlDepth: 10
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: zap-report.json
+      reportTitle: ZAP Security Report
+      reportDescription: DevSecOps Security Scan
+
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk
+      reportFile: zap-report.html
+      reportTitle: ZAP Security Report
+      reportDescription: DevSecOps Security Scan
+
+  - type: exitStatus

@@ -47,13 +47,11 @@ if ZAP_PATH.exists():
             "alerts",
             [],
         ):
-            risk = alert.get(
-                "riskdesc",
-                "",
-            )
-            if "High" in risk:
+            risk = str(alert.get("riskcode", ""))
+
+            if risk == "3":
                 summary["zap_high"] += 1
-            elif "Medium" in risk:
+            elif risk == "2":
                 summary["zap_medium"] += 1
 
 OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

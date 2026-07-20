@@ -191,6 +191,7 @@ jobs:
         with:
           name: integrated-security-reports
           path: |
+            reports/summary/sec-summary.md
             reports/summary/sec-summary.json
             reports/summary/ai_final_report.md
             reports/semgrep/semgrep_for_llm.json
