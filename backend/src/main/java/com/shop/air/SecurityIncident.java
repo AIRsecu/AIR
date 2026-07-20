@@ -21,5 +21,7 @@ public class SecurityIncident {
     private String payload;
     private String actionTaken;   // DEFENSE_ENABLED:order.qty-guard ...
     private String status;        // DETECTED | MITIGATED | PATCHED | FAILED
+    private String severity;      // CRITICAL|HIGH|MEDIUM|LOW (탐지 시점 위험도, 영속) [A2]
+    private Integer score;        // 0~100 위험 점수(탐지 시점, 영속) [A2]
     private LocalDateTime createdAt;
 }

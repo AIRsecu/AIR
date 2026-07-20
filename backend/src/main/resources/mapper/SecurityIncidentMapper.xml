@@ -13,15 +13,17 @@
         <result property="payload"     column="payload"/>
         <result property="actionTaken" column="action_taken"/>
         <result property="status"      column="status"/>
+        <result property="severity"    column="severity"/>
+        <result property="score"       column="score"/>
         <result property="createdAt"   column="created_at"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.shop.air.SecurityIncident">
         INSERT INTO security_incidents
-            (id, type, endpoint, client_ip, actor, payload, action_taken, status, created_at)
+            (id, type, endpoint, client_ip, actor, payload, action_taken, status, severity, score, created_at)
         VALUES
             (#{id}, #{type}, #{endpoint}, #{clientIp}, #{actor}, #{payload},
-             #{actionTaken}, #{status}, datetime('now'))
+             #{actionTaken}, #{status}, #{severity}, #{score}, datetime('now'))
     </insert>
 
     <update id="updateStatus">
@@ -33,5 +35,11 @@
     <select id="findRecent" resultMap="IncidentRM">
         SELECT * FROM security_incidents ORDER BY created_at DESC LIMIT #{limit}
     </select>
+
+    <!-- [A1] 보존정책: created_at 이 N일보다 오래된 인시던트 삭제 -->
+    <delete id="deleteOlderThan">
+        DELETE FROM security_incidents
+        WHERE created_at &lt; datetime('now', '-' || #{days} || ' days')
+    </delete>
 
 </mapper>
