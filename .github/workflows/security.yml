@@ -84,7 +84,7 @@ jobs:
           mkdir -p reports/zap
           chmod 777 reports/zap
 
-      - name: Run ZAP Baseline Scan
+      - name: Run ZAP Scan
         run: bash scripts/security/run-zap.sh
         continue-on-error: true    # 실패 시 workflow 실행(추후 false로 변경 필요)
 

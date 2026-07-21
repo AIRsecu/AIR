@@ -13,8 +13,8 @@ services:
     environment:
       # JWT 시크릿 (운영 시 반드시 교체)
       - SPRING_APPLICATION_NAME=multitenant-shop
-      - JWT_ACCESS_SECRET=3Y6sB9mP2xQ7rN8vK4cT1hL5zF0aW6eJ9pR2mX8n
-      - JWT_REFRESH_SECRET=8vQ2kL4mP9tH7xN5cR1zW6eY3aJ8fD2uB0sG4p
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-change-me-access-secret-min-32chars-padding}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-change-me-refresh-secret-min-32chars-padding}
       - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-60}
       - JWT_SUPER_ACCESS_TTL_HOURS=${JWT_SUPER_ACCESS_TTL_HOURS:-120}
       - JWT_REFRESH_TTL_HOURS=${JWT_REFRESH_TTL_HOURS:-168}
