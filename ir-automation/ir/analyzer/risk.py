@@ -48,14 +48,8 @@ def score(attack_type: str) -> int:
 
 
 def severity(attack_type: str) -> Severity:
-    s = score(attack_type)
-    if s >= 90:
-        return Severity.CRITICAL
-    if s >= 70:
-        return Severity.HIGH
-    if s >= 40:
-        return Severity.MEDIUM
-    return Severity.LOW
+    """유형(type) 기준 등급 — 점수 사다리는 _severity_from_score 단일 소스(M-1)."""
+    return _severity_from_score(score(attack_type))
 
 
 @dataclass(frozen=True)
@@ -108,12 +102,10 @@ def assess(incident: Incident, settings: Settings | None = None) -> RiskAssessme
 # ─────────────────────────────────────────────────────────────
 
 def _severity_from_score(s: int) -> Severity:
-    """
-    최종 점수(컨텍스트 가중 반영 후) 로 severity 재판정.
+    """점수(0~100) → severity 등급 매핑 — base/effective 공통 단일 사다리.
 
-    기존 severity(attack_type) 는 유형만 보고 판정하므로,
-    컨텍스트 가중이 반영된 점수를 등급에 재매핑하려면 별도 함수가 필요.
-    임계값은 기존 severity() 와 동일하게 유지.
+    severity(attack_type)(유형 기준)와 _make_assessment(base/effective)이
+    모두 이 함수를 통해 등급을 판정한다(임계값 단일 소스, M-1).
     """
     if s >= 90:
         return Severity.CRITICAL
@@ -155,6 +147,37 @@ def _time_weight(occurred_at: datetime | None, settings: Settings) -> int:
     return 0
 
 
+def _compose_effective(
+    incident: Incident,
+    ctx: RiskContext,
+    *,
+    recent_hits: int,
+    block_hits: int,
+    settings: Settings,
+) -> tuple[RiskAssessment, dict]:
+    """base + 컨텍스트 가중(endpoint/payload/재범/시간대) 합성 → RiskAssessment (H-1 단일화).
+
+    재범 소스(recent_hits/block_hits)는 호출자가 주입한다:
+      - 함수형 assess_with_context: recent_hits=0 (슬라이딩 윈도우 미반영)
+      - 클래스형 RiskAnalyzer.assess: tracker/BlockStore 조회값
+    반환 (assessment, 로그 성분 dict) — 로그 형식은 호출자별로 달라 성분만 넘긴다.
+    """
+    base = score(incident.type)
+    endpoint_w = _rules.match_endpoint_weight(ctx.endpoint)
+    payload_w, matched = _rules.match_payload_weight(ctx.payload)
+    recid_w = _rules.recidivism_weight(recent_hits=recent_hits, block_hits=block_hits)
+    time_w = _time_weight(ctx.occurred_at, settings)
+    total = _rules.clamp_score(base + endpoint_w + payload_w + recid_w + time_w)
+    assessment = _make_assessment(
+        base_score=base, effective_score=total, settings=settings,
+    )
+    parts = {
+        "base": base, "endpoint_w": endpoint_w, "payload_w": payload_w,
+        "matched": matched, "recid_w": recid_w, "time_w": time_w, "total": total,
+    }
+    return assessment, parts
+
+
 def assess_with_context(
     incident: Incident,
     ctx: RiskContext | None = None,
@@ -168,30 +191,23 @@ def assess_with_context(
     - effective: base + endpoint + payload + recidivism + time, [0,100] clamp.
     - base_score/base_severity: 유형(type)만 — 앱 parity.
     - 차단/TTL/CRITICAL 웹훅: base_severity 기준 (effective 로 승격되지 않음).
-    - 재범 슬라이딩 윈도우는 RiskAnalyzer 클래스 경로에서 처리;
+    - 재범 슬라이딩 윈도우는 RiskAnalyzer 클래스 경로에서 처리(여기선 recent_hits=0);
       block_hits 는 ctx 에 미리 담겨 있으면 반영.
     """
     settings = settings or get_settings()
     if ctx is None:
         return assess(incident, settings)
 
-    base = score(incident.type)
-    endpoint_w = _rules.match_endpoint_weight(ctx.endpoint)
-    payload_w, matched = _rules.match_payload_weight(ctx.payload)
-    recid_w = _rules.recidivism_weight(recent_hits=0, block_hits=ctx.block_hits)
-    time_w = _time_weight(ctx.occurred_at, settings)
-
-    total = _rules.clamp_score(base + endpoint_w + payload_w + recid_w + time_w)
-
+    assessment, p = _compose_effective(
+        incident, ctx, recent_hits=0, block_hits=ctx.block_hits, settings=settings,
+    )
     _logger.debug(
         "assess_with_context type=%s base=%d ep=+%d pl=+%d%s recid=+%d time=+%d => %d",
-        incident.type, base, endpoint_w, payload_w,
-        f"({','.join(matched)})" if matched else "",
-        recid_w, time_w, total,
+        incident.type, p["base"], p["endpoint_w"], p["payload_w"],
+        f"({','.join(p['matched'])})" if p["matched"] else "",
+        p["recid_w"], p["time_w"], p["total"],
     )
-    return _make_assessment(
-        base_score=base, effective_score=total, settings=settings,
-    )
+    return assessment
 
 
 class RiskAnalyzer:
@@ -233,10 +249,6 @@ class RiskAnalyzer:
         if ctx is None:
             return assess(incident, self._settings)
 
-        base = score(incident.type)
-        endpoint_w = _rules.match_endpoint_weight(ctx.endpoint)
-        payload_w, matched = _rules.match_payload_weight(ctx.payload)
-
         # 재범: 슬라이딩 윈도우(단기) + BlockStore hits(장기)
         recent = 0
         if ctx.client_ip:
@@ -251,17 +263,9 @@ class RiskAnalyzer:
             if entry is not None:
                 block_hits = getattr(entry, "hits", 0) or 0
 
-        recid_w = _rules.recidivism_weight(
-            recent_hits=recent,
-            block_hits=block_hits,
-        )
-        time_w = _time_weight(ctx.occurred_at, self._settings)
-
-        total = _rules.clamp_score(
-            base + endpoint_w + payload_w + recid_w + time_w
-        )
-        assessment = _make_assessment(
-            base_score=base, effective_score=total, settings=self._settings,
+        assessment, p = _compose_effective(
+            incident, ctx, recent_hits=recent, block_hits=block_hits,
+            settings=self._settings,
         )
 
         _logger.info(
@@ -269,10 +273,10 @@ class RiskAnalyzer:
             "recid=+%d(recent=%d,hits=%d) time=+%d => %d(%s, base=%s)",
             incident.type,
             ctx.client_ip or "-",
-            base, endpoint_w, payload_w,
-            f"({','.join(matched)})" if matched else "",
-            recid_w, recent, block_hits, time_w,
-            total, assessment.severity.value, assessment.base_severity.value,
+            p["base"], p["endpoint_w"], p["payload_w"],
+            f"({','.join(p['matched'])})" if p["matched"] else "",
+            p["recid_w"], recent, block_hits, p["time_w"], p["total"],
+            assessment.severity.value, assessment.base_severity.value,
         )
 
         # 기록은 스코어링 완료 후 — 같은 이벤트가 자기 자신을 재범으로 못 세게
