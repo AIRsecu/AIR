@@ -1,0 +1,43 @@
+---
+env:
+  contexts:
+    - name: air-shop
+      urls:
+        - "http://host.docker.internal"
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # run-zap.sh에서 발급한 customer JWT를 모든 요청 헤더에 주입
+  - type: replacer
+    parameters:
+      rules:
+        - description: "JWT Bearer token injection"
+          matchType: req_header
+          matchRegex: false
+          matchString: Authorization
+          replacement: "Bearer ${ZAP_CUSTOMER_TOKEN}"
+          enabled: true
+
+  - type: spider
+    parameters:
+      context: air-shop
+      maxDuration: 2
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  # Active Scan: 실제 페이로드(SQLi·XSS 등)를 주입해 취약점 탐지
+  - type: activeScan
+    parameters:
+      context: air-shop
+      maxDuration: 10
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: zap-report.json
