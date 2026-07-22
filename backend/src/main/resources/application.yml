@@ -31,6 +31,9 @@ app:
   bootstrap-admin-username: admin
   bootstrap-admin-password: change-me-admin-password
   cors-origins: http://localhost:5173
+  # [A1] 인시던트 보존정책: created_at 이 N일 초과면 삭제(0 이하 = 비활성). 매일 cron 실행.
+  incident-retention-days: 90
+  incident-retention-cron: "0 15 3 * * *"
 
 logging:
   level:

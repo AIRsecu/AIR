@@ -50,13 +50,14 @@ public class AirController {
         return ResponseEntity.ok(ApiResponse.ok(enriched));
     }
 
-    /** [IR] 인시던트에 위험도(severity/riskScore) 를 덧붙여 반환(엔티티/DB 무변경). */
+    /** [IR] 인시던트에 위험도(severity/riskScore) 를 덧붙여 반환.
+     *  [A2] 저장된 시점 위험도 우선 — 과거 행(severity/score=null)은 유형기반 재계산 폴백. */
     private static Map<String, Object> enrich(SecurityIncident i) {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("id", i.getId());
         m.put("type", i.getType());
-        m.put("severity", RiskScoring.severity(i.getType()));
-        m.put("riskScore", RiskScoring.score(i.getType()));
+        m.put("severity", i.getSeverity() != null ? i.getSeverity() : RiskScoring.severity(i.getType()));
+        m.put("riskScore", i.getScore() != null ? i.getScore() : RiskScoring.score(i.getType()));
         m.put("endpoint", i.getEndpoint());
         m.put("clientIp", i.getClientIp());
         m.put("actor", i.getActor());

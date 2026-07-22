@@ -1,0 +1,203 @@
+name: Security Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - feature/**
+      - feat/**
+      - main
+      
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  # ==========================================
+  # 1. SAST 스캔
+  # ==========================================
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Create Report Directory
+        run: mkdir -p reports/semgrep
+
+      # 러너에 Semgrep 설치
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep Scan
+        run: bash scripts/security/run-semgrep.sh
+
+      - name: Upload Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: reports/semgrep/semgrep.json
+
+  # ==========================================
+  # 2. 컨테이너 및 의존성 스캔
+  # ==========================================
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Report Directory
+        run: mkdir -p reports/trivy
+
+      - name: Run Trivy Scan
+        run: bash scripts/security/run-trivy.sh
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: reports/trivy/
+
+  # ==========================================
+  # 3. DAST 스캔
+  # ==========================================
+  zap:
+    runs-on: ubuntu-latest
+    env:
+      JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.CI_JWT_REFRESH_SECRET }}
+      ADMIN_PASSWORD: ${{ secrets.CI_ADMIN_PASSWORD }}
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Create Report Directory
+        run: |
+          mkdir -p reports/zap
+          chmod 777 reports/zap
+
+      - name: Run ZAP Baseline Scan
+        run: bash scripts/security/run-zap.sh
+        continue-on-error: true    # 실패 시 workflow 실행(추후 false로 변경 필요)
+
+      - name: Check ZAP alert severity
+        if: always()    # 스캔 성공/실패와 관계없이 리포트 검증
+        run: |
+          jq '[.site[]?.alerts[]? | select(.riskcode !="0")] | length' \
+          reports/zap/zap-report.json || echo "0"
+
+      - name: Debug Report Files
+        run: ls -al reports/zap
+
+      - name: Fix ZAP Report Permissions
+        run: sudo chown -R $USER:$USER reports/zap
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap/zap-report.json
+          if-no-files-found: error
+
+  # ==========================================
+  # 4. 결과 집계 및 보안 게이트
+  # ==========================================
+  summary:
+    needs: [semgrep, trivy, zap]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 1. 각 스캔 결과를 제 위치에 다운로드
+      - name: Download Semgrep Report
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-results
+          path: reports/semgrep
+
+      - name: Download Trivy Report
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-results
+          path: reports/trivy
+          
+      - name: Download ZAP Report
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-report
+          path: reports/zap
+
+      # 2. 기존 통계 Summary 생성
+      - name: Generate Security Summary
+        run: |
+          mkdir -p reports/summary
+          python scripts/generate_summary.py
+
+      # 3. LLM 전용 데이터 경량화 스크립트 실행
+      - name: Extract Reports for LLM
+        run: |
+          python scripts/extract_semgrep.py
+          python scripts/extract_trivy.py
+          python scripts/extract_zap.py
+
+      # 4. AI 에이전트 전용 독립 환경 구성 (scripts/ai_agent/requirements.txt 사용)
+      - name: Install AI Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/ai_agent/requirements.txt
+
+      # 5. LangGraph AI 에이전트 파이프라인 실행
+      - name: AI re-evaluation (provider seam)
+        env:
+          AIR_LLM_PROVIDER: ${{ vars.AIR_LLM_PROVIDER }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pip install -r scripts/ai_agent/requirements.txt
+          bash scripts/llm/run-ai.sh
+
+      # 6. 생성된 AI 마크다운 리포트를 GitHub Summary에 출력
+      - name: Publish AI Report to Job Summary
+        run: |
+          if [ -f reports/summary/ai_final_report.md ]; then
+            cat reports/summary/ai_final_report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 통합 리포트(스캔 + AI + 런타임 IR → 단일)
+      - run: python reports/contract/aggregate.py
+      - run: |
+          [ -f reports/summary/unified_report.md ] && \
+            cat reports/summary/unified_report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      # 7. 아티팩트 업로드
+      - name: Upload Integrated & AI Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrated-security-reports
+          path: |
+            reports/summary/sec-summary.json
+            reports/summary/ai_final_report.md
+            reports/semgrep/semgrep_for_llm.json
+            reports/trivy/trivy_for_llm.json
+            reports/zap/zap_for_llm.json
+
+      # 8. Security Gate 통제 로직
+      - name: Run Security Gate
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
+        run: python policy/security_gate.py

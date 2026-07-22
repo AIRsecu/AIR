@@ -11,4 +11,5 @@ public interface SecurityIncidentMapper {
     void updateStatus(@Param("id") String id, @Param("status") String status,
                       @Param("actionTaken") String actionTaken);
     List<SecurityIncident> findRecent(@Param("limit") int limit);
+    int deleteOlderThan(@Param("days") int days);   // [A1] 보존정책
 }

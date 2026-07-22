@@ -5,7 +5,9 @@ import java.util.Map;
 /**
  * AIR 인시던트 위험도 스코어링(유형 기반, 결정적).
  *  score(0~100) → severity(CRITICAL/HIGH/MEDIUM/LOW). 미지 유형은 LOW(30).
- *  ※ 엔티티/DB 무변경 — 응답 enrich + Discord 알림 + 대시보드 표시에 사용.
+ *  이 표가 위험도의 정본(SSOT). IR(analyzer/risk.py)은 이 값을 그대로 미러해야 하며,
+ *  크로스언어 동일성 가드는 ir-automation 이 dev 에 합류하면 추가한다(백로그).
+ *  [A2] 탐지 시점 값은 security_incidents.severity/score 에 영속(enrich 는 저장값 우선).
  */
 public final class RiskScoring {
     private RiskScoring() {}

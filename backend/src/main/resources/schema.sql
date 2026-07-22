@@ -150,6 +150,8 @@ CREATE TABLE IF NOT EXISTS security_incidents (
     payload      TEXT,                   -- 탐지된 요청 본문(잘림)
     action_taken TEXT,                   -- DEFENSE_ENABLED:order.qty-guard 등
     status       TEXT NOT NULL DEFAULT 'DETECTED', -- DETECTED|MITIGATED|PATCHED|FAILED
+    severity     TEXT,                   -- CRITICAL|HIGH|MEDIUM|LOW (탐지 시점 위험도, 영속) [A2]
+    score        INTEGER,                -- 0~100 위험 점수(탐지 시점, 영속) [A2]
     created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -179,3 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_signup_tenant_status ON signup_requests(tenant_id
 CREATE INDEX IF NOT EXISTS idx_tenant_admins_user   ON tenant_admins(user_id);
 CREATE INDEX IF NOT EXISTS idx_charge_tenant_status  ON charge_requests(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_charge_user           ON charge_requests(user_id);
+-- [A1] 보안 인시던트 조회/집계 최적화 (findRecent 정렬 · IP/유형 이력 질의)
+CREATE INDEX IF NOT EXISTS idx_incident_created      ON security_incidents(created_at);
+CREATE INDEX IF NOT EXISTS idx_incident_client_ip    ON security_incidents(client_ip);
+CREATE INDEX IF NOT EXISTS idx_incident_type         ON security_incidents(type);

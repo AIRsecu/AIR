@@ -1,0 +1,13 @@
+[
+  {
+    "target": "air-app:latest (jar)",
+    "cve_id": "CVE-2022-1471",
+    "severity": "HIGH",
+    "cvss_score": 8.3,
+    "package_name": "org.yaml:snakeyaml",
+    "installed_version": "1.30",
+    "fixed_version": "2.0",
+    "title": "SnakeYaml Constructor deserialization RCE",
+    "description": "SnakeYaml's Constructor class allows arbitrary type deserialization leading to RCE."
+  }
+]

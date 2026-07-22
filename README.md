@@ -1,11 +1,17 @@
-# AIR — 자율방어 vuln-lab (`feature/air-defense`)
+# Secure CI Pipeline (`feat/security-gates`)
 
-> **AIR (Automated Incident Response)** — 실시간 위협 대응 DevSecOps 자동화 팀 프로젝트.
-> 본 브랜치(`feature/air-defense`)는 [`feature/web`](../../tree/feature/web)의 취약 앱에
-> **자율방어(AIR)** 를 얹은 적용본입니다. 공격을 스스로
-> **탐지 → 즉시 차단 → 인시던트 기록 → 위험도 산정 → Discord 경고 → (자동 소스패치)** 로 대응합니다.
+> GitHub Actions 기반 병렬 보안 스캔 및 Security Gate 자동화.
+> 본 브랜치는 vuln-lab 환경에 대해 **SAST · Dependency Scan · DAST** 를 병렬 수행하고,
+> 결과를 통합 분석하여 Build/PR 단계에서 위험 기반 검증을 수행합니다.
 
-> ⚠️ 의도적 취약점을 포함한 **vuln-lab**. 격리 스택(`:8081`)에서 신뢰 IP 로만 구동하세요.
+---
+
+## 구성 목적
+
+* 보안 검사를 CI 단계로 이동(Shift Left)
+* 병렬 스캔 기반 Pipeline 최적화
+* Severity 기반 Security Gate 적용
+* 취약점 결과 통합 및 Artifact 관리
 
 ---
 
@@ -13,6 +19,8 @@
 
 | 영역 | 내용 |
 |---|---|
+| CI / 보안 파이프라인 | GitHub Actions — Semgrep(SAST) · Trivy(SCA/SBOM) · OWASP ZAP(DAST) · Security Gate · 리포트 통합/Artifact + AI 분석 |
+| IR 서비스(외부) | `ir-automation/` (Python FastAPI `:8090`) — 앱 `IncidentService` → `IrForwarder` push → TTL IP차단 · Discord · reconcile |
 | Backend | Java 21, Spring Boot 3.3.5, Spring Security + JJWT, MyBatis 3, SQLite |
 | AIR 방어 | `com.shop.air` (DetectionFilter · DefenseRegistry · IncidentService · DynamicRuleRegistry) |
 | 오케스트레이터 | `air-orchestrator/` (Python: responder.py · knowledge.py · verify.sh) — 자동 소스패치 |
@@ -125,4 +133,151 @@ docker-compose -p airlab -f docker-compose.lab.yml up -d --build
 `feature/web`(취약 baseline `:80`) ↔ **`feature/air-defense`**(자율방어 `:8081`) / `feature/air-attack`(DAST) / `dev`(CI).
 
 ---
-_학습/보안 실습용 자율방어 테스트베드입니다._
+
+## Pipeline 구조
+
+```text id="o3m67u"
+                ┌──────────────────────────────┐
+                │ Git Push / Pull Request      │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ GitHub Actions Workflow      │
+                └──────────────┬───────────────┘
+        ┌──────────────────────┼──────────────────────┐ 
+        │                      │                      │
+        ▼                      ▼                      ▼
+┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
+│ Semgrep            │  │ Trivy              │  │ OWASP ZAP          │
+│ SAST / Static      │  │ Dependency /       │  │ DAST / Runtime     │
+│ Code Analysis      │  │ Image CVE          │  │ Scan               │
+└────────────────────┘  └────────────────────┘  └────────────────────┘
+        │                      │                      │
+        └──────────────────────┼──────────────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Security Summary             │
+                │ Severity & Findings Report   │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Security Gate                │
+                │ Build / PR Validation        │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Build Validation             │
+                └──────────────────────────────┘
+```
+
+---
+
+## 병렬 보안 스캔
+
+각 보안 도구를 독립 Job 으로 분리하여 병렬 처리 구조 구성.
+
+| Scanner   | 역할                        |
+| --------- | ------------------------- |
+| Semgrep   | 정적 코드 분석                  |
+| Trivy     | Dependency / Image CVE 검사 |
+| OWASP ZAP | 실행 환경 대상 동적 진단            |
+
+---
+
+## Security Gate
+
+Severity 기반 Build 검증 정책 적용.
+
+| 조건               | 동작          |
+| ---------------- | ----------- |
+| Critical 발견      | Build Fail  |
+| High 임계치 초과      | PR Block    |
+| Blocking Rule 탐지 | Workflow 중단 |
+
+---
+
+## Summary & Artifact
+
+각 스캐너 결과를 통합하여:
+
+* Severity Count
+* Findings Summary
+* Security Status
+
+를 자동 생성 및 Artifact 저장.
+
+---
+
+## 프로젝트 구조
+
+```text id="9zvr8m"
+project-root/
+│
+├── .github/
+│   └── workflows/
+│       └── security.yml
+│
+├── docs/
+│   └── security/
+│       ├── security.yml
+│       ├── overview.md
+│       ├── policy.md
+│       ├── workflow.md
+│       └── sec-summary.md
+│
+├── reports/
+│   ├── semgrep/
+│   ├── trivy/
+│   ├── zap/
+│   └── summary/
+│
+├── scripts/
+│   ├── security/
+│   │   ├── run-sumgrep.sh
+│   │   ├── run-trivy.sh
+│   │   ├── run-zap.sh
+│   │   └── run-summary.sh
+│   │
+│   └── generate_summary.py
+│
+└── policy/
+    ├── security_gate.py
+    └── security_policy.json
+```
+
+---
+
+## Workflow Trigger
+
+```text id="my2ph4"
+push
+pull_request
+
+branches:
+- main
+- dev
+- feature/**
+- feat/**
+```
+
+---
+
+## 핵심 포인트
+
+* SAST · DAST · CVE Scan 병렬 처리
+* Severity 기반 Merge/Build 제어
+* 통합 Security Summary 자동 생성
+* Security Validation 자동화 Workflow 구성
+
+---
+
+## 향후 확장
+
+* Discord / Slack Alert
+* Risk Score 연계
+* Runtime WAF 연동
+* 실시간 Security Dashboard
+
+---
+
+*DevSecOps 기반 Secure CI Validation Workflow*

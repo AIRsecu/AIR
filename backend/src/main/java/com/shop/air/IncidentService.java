@@ -22,6 +22,7 @@ public class IncidentService {
     private final DefenseRegistry registry;
     private final SecurityIncidentMapper incidentMapper;
     private final DiscordNotifier discordNotifier;
+    private final IrForwarder irForwarder;
 
     /** 인시던트 유형 → 방어 키 매핑 (알려진 시그니처) */
     private static final Map<String, String> TYPE_TO_DEFENSE = Map.ofEntries(
@@ -67,11 +68,17 @@ public class IncidentService {
                 .payload(truncate(payload))
                 .actionTaken(action)
                 .status("MITIGATED")
+                .severity(RiskScoring.severity(type))   // [A2] 탐지 시점 위험도 영속
+                .score(RiskScoring.score(type))
                 .build();
         incidentMapper.insert(inc);
 
         // [IR] 위험도 산정(유형 기반) + Discord 비동기 알림(웹훅 미설정 시 no-op)
         discordNotifier.notifyIncident(inc, RiskScoring.severity(type), RiskScoring.score(type));
+
+        // [IR 유입] ir-automation(FastAPI /ingest)로 비동기 전달 → 지속형 IP차단/사후대응
+        //  (dedup 통과분만 전달 → IR 쪽도 플러딩 방지. AIR_IR_INGEST_URL 미설정 시 no-op)
+        irForwarder.forward(inc);
 
         // [5단계] 비동기 소스 패치는 별도 오케스트레이터(air-orchestrator/responder.py)가
         // 이 인시던트를 폴링 → Claude API 패치 생성 → 검증 → 커밋 후

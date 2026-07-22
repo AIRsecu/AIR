@@ -1,0 +1,27 @@
+[
+  {
+    "incident": {
+      "id": "a1b2c3d4",
+      "type": "SQLI_ATTEMPT",
+      "endpoint": "/api/v1/search",
+      "client_ip": "203.0.113.7",
+      "actor": "anonymous",
+      "payload": "' OR 1=1--",
+      "action_taken": "BLOCK",
+      "status": "BLOCKED",
+      "created_at": "2026-07-06T00:12:00Z"
+    },
+    "risk": { "score": 90, "severity": "HIGH", "block_seconds": 120 },
+    "response": {
+      "action": "block_ip",
+      "ip": "203.0.113.7",
+      "mode": "nginx",
+      "ttl_seconds": 120,
+      "hits": 3,
+      "enforced": true
+    },
+    "notified": true,
+    "playbook": { "detect": true, "analyze": true, "contain": true, "recover": false },
+    "recorded_at": "2026-07-06T00:12:01Z"
+  }
+]

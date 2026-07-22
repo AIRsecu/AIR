@@ -1,0 +1,127 @@
+# ⚠️ 제안(DRAFT) — 실제 .github/workflows/security.yml 은 JHyye 소유.
+# 이 파일은 병합 참고용 union 초안이다(리뷰 후 JHyye 가 반영). 여기 두면 실행되지 않는다.
+#
+# 통합 원칙:
+#   - 스캔 오케스트레이션 = JHyye 의 scripts/security/run-*.sh 유지
+#   - AI 재평가          = Digrass 파이프라인을 병록 seam 래퍼(run-ai.sh) 경유(무키 폴백)
+#   - 통합 리포트        = 병록 reports/contract/aggregate.py
+#   - 게이트             = JHyye policy/security_gate.py (main 에서만 차단)
+name: Security Pipeline
+
+on:
+  push:
+    branches: [dev, "feature/**", "feat/**"]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install semgrep
+      - run: bash scripts/security/run-semgrep.sh        # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: semgrep-results, path: reports/semgrep/semgrep.json }
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/security/run-trivy.sh          # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: trivy-results, path: reports/trivy/trivy.json }
+
+  zap:
+    runs-on: ubuntu-latest
+    env:
+      JWT_ACCESS_SECRET: ci-access-secret-32chars-minimum-padding-1234567890
+      JWT_REFRESH_SECRET: ci-refresh-secret-32chars-minimum-padding-1234567890
+      ADMIN_PASSWORD: ci-admin-password-1234!
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/security/run-zap.sh            # JHyye
+      - uses: actions/upload-artifact@v4
+        with: { name: zap-report, path: reports/zap/zap-report.json, if-no-files-found: error }
+
+  summary:
+    needs: [semgrep, trivy, zap]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: semgrep-results, path: reports/semgrep }
+      - uses: actions/download-artifact@v4
+        with: { name: trivy-results, path: reports/trivy }
+      - uses: actions/download-artifact@v4
+        with: { name: zap-report, path: reports/zap }
+
+      # 통계 요약 + LLM 입력 축약 (JHyye/Digrass 기존)
+      - run: bash scripts/security/run-summary.sh        # generate_summary.py
+      - run: |
+          python scripts/extract_semgrep.py
+          python scripts/extract_trivy.py
+          python scripts/extract_zap.py
+
+      # ★ SBOM 명세서 (멘토 권고: 스캐너 결과 정규화 후 '별도 명세서'). LLM 과 디커플링.
+      #   raw CycloneDX 생성은 JHyye trivy 스텝에서(예):
+      #     trivy fs . --format cyclonedx -o reports/sbom/sbom.cyclonedx.json   (아티팩트 업로드)
+      #   → 여기서 병록 sbom.py 로 정규화 + Trivy CVE 교차참조. 파일 없으면 skip(비차단).
+      - name: Normalize SBOM manifest
+        run: |
+          if [ -f reports/sbom/sbom.cyclonedx.json ]; then
+            python reports/contract/sbom.py \
+              --sbom reports/sbom/sbom.cyclonedx.json \
+              --trivy reports/trivy/trivy_for_llm.json \
+              --out-dir reports/summary
+          else
+            echo "[sbom] reports/sbom/sbom.cyclonedx.json 없음 — skip (JHyye trivy 스텝에서 생성)"
+          fi
+
+      # AI 재평가 — 병록 seam 경유. 로컬(Ollama)/클라우드 키 어느 것이든, 없으면 휴리스틱(비차단).
+      # 로컬 LLM 은 취약점·소스코드를 외부로 안 보냄(보안 과제 권장). 단 GitHub 러너엔 Ollama 가
+      # 없으므로 CI 는 vars.AIR_LLM_PROVIDER 를 비워 두고(=키/휴리스틱), 로컬은 데모/EC2 에서 활성화.
+      - name: AI re-evaluation (provider seam)
+        env:
+          AIR_LLM_PROVIDER: ${{ vars.AIR_LLM_PROVIDER }}   # 예: ollama(로컬 러너에서만), 미설정 시 키/휴리스틱
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}      # 셀프호스트 러너에서 로컬 LLM 쓸 때만
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pip install -r scripts/ai_agent/requirements.txt
+          # OpenAI 외 클라우드 공급자 쓰면 아래 주석 해제(로컬 Ollama 는 추가 패키지 불필요):
+          # pip install -r scripts/llm/requirements-llm.txt
+          bash scripts/llm/run-ai.sh
+
+      # ★ 병록 통합기 — 스캔 + AI판정 + 런타임 IR 을 단일 리포트로
+      - name: Aggregate unified report
+        run: python reports/contract/aggregate.py
+      - name: Publish unified report to job summary
+        run: |
+          if [ -f reports/summary/unified_report.md ]; then
+            cat reports/summary/unified_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integrated-security-reports
+          path: |
+            reports/summary/sec-summary.json
+            reports/summary/ai_final_report.md
+            reports/summary/unified_report.json
+            reports/summary/unified_report.md
+            reports/summary/sbom_normalized.json
+            reports/summary/sbom.md
+
+      # 게이트 (JHyye) — main 에서만 차단
+      - name: Run Security Gate
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
+        run: python policy/security_gate.py

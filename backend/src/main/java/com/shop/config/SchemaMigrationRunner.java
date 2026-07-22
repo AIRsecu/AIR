@@ -33,6 +33,9 @@ public class SchemaMigrationRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         ensureColumn("tenants", "domain",  "ALTER TABLE tenants ADD COLUMN domain TEXT");
         ensureColumn("users",   "balance", "ALTER TABLE users ADD COLUMN balance INTEGER NOT NULL DEFAULT 0");
+        // [A2] 인시던트 위험도 영속 — 기존 DB 무중단 컬럼 추가(멱등)
+        ensureColumn("security_incidents", "severity", "ALTER TABLE security_incidents ADD COLUMN severity TEXT");
+        ensureColumn("security_incidents", "score",    "ALTER TABLE security_incidents ADD COLUMN score INTEGER");
     }
 
     /** 해당 테이블에 컬럼이 없으면 ALTER 로 추가 (있으면 스킵). */
