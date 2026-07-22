@@ -27,6 +27,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/shop.db
       # [IR] Discord 웹훅 — 실제 URL 은 .env 에만(커밋 금지). 미설정 시 no-op.
       - AIR_DISCORD_WEBHOOK=${AIR_DISCORD_WEBHOOK:-}
+      # [IR 유입] ir-automation(FastAPI /ingest) 주소 — 미설정 시 앱→IR 전달 no-op.
+      # 예) 같은 호스트에서 uvicorn :8090 이면 http://host.docker.internal:8090/ingest
+      - AIR_IR_INGEST_URL=${AIR_IR_INGEST_URL:-}
     volumes:
       - airlab-data:/data
     healthcheck:
