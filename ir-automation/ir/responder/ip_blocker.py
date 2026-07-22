@@ -159,7 +159,7 @@ class IpBlocker:
         entry, is_new = self.store.upsert(
             ip,
             reason=incident.type,
-            severity=assessment.severity.value,
+            severity=assessment.base_severity.value,
             mode=mode,
             incident_id=incident.ensure_id(),
             ttl_seconds=ttl,

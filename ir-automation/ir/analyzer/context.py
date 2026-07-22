@@ -9,9 +9,11 @@ RecidivismTracker:
     - IP별 최근 1000개 타임스탬프(maxlen) — 초과 시 오래된 것부터 eviction
     - 추적 IP 수도 1000개 LRU 상한 — 무한 누적 방지
     - **프로세스 재시작 시 전부 유실**된다. 장기 재범 신호는 BlockStore.hits 가 담당.
+    - threading.Lock — sync ingest + asyncio.to_thread(reconcile) 동시 접근 안전.
 """
 from __future__ import annotations
 
+import threading
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass
@@ -57,7 +59,7 @@ class RecidivismTracker:
 
     한계(의도적):
       - 프로세스 재시작 시 유실 → 영속 신호는 BlockStore.hits 로 보완
-      - uvicorn --workers>1 이면 워커별 파편화(GIL/단일 워커 전제)
+      - 멀티프로세스 배포 시 워커별 파편화 (Lock 은 프로세스 내 스레드만 보호)
     """
 
     def __init__(
@@ -68,6 +70,7 @@ class RecidivismTracker:
     ) -> None:
         self._max_hits_per_ip = max_hits_per_ip
         self._max_tracked_ips = max_tracked_ips
+        self._lock = threading.Lock()
         # OrderedDict: 최근 접근 IP 가 끝으로 — 초과 시 앞에서 pop (LRU)
         self._events: OrderedDict[str, deque[float]] = OrderedDict()
 
@@ -76,13 +79,14 @@ class RecidivismTracker:
         if not ip:
             return
         now = time.time() if now is None else now
-        if ip in self._events:
-            self._events.move_to_end(ip)
-            self._events[ip].append(now)
-        else:
-            self._events[ip] = deque([now], maxlen=self._max_hits_per_ip)
-            while len(self._events) > self._max_tracked_ips:
-                self._events.popitem(last=False)
+        with self._lock:
+            if ip in self._events:
+                self._events.move_to_end(ip)
+                self._events[ip].append(now)
+            else:
+                self._events[ip] = deque([now], maxlen=self._max_hits_per_ip)
+                while len(self._events) > self._max_tracked_ips:
+                    self._events.popitem(last=False)
 
     def count(
         self,
@@ -94,19 +98,21 @@ class RecidivismTracker:
         """윈도우 내 이전 이벤트 수. 만료분 prune 후 반환."""
         if not ip:
             return 0
-        dq = self._events.get(ip)
-        if not dq:
-            return 0
         now = time.time() if now is None else now
-        cutoff = now - window_seconds
-        while dq and dq[0] < cutoff:
-            dq.popleft()
-        if not dq:
-            self._events.pop(ip, None)
-            return 0
-        self._events.move_to_end(ip)  # LRU touch
-        return len(dq)
+        with self._lock:
+            dq = self._events.get(ip)
+            if not dq:
+                return 0
+            cutoff = now - window_seconds
+            while dq and dq[0] < cutoff:
+                dq.popleft()
+            if not dq:
+                self._events.pop(ip, None)
+                return 0
+            self._events.move_to_end(ip)  # LRU touch
+            return len(dq)
 
     def __len__(self) -> int:
         """추적 중인 IP 수(관측/테스트용)."""
-        return len(self._events)
+        with self._lock:
+            return len(self._events)

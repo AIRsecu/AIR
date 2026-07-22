@@ -56,8 +56,13 @@ class IRPipeline:
         result = self.blocker.block(incident, assessment)
         notified = self.notifier.notify_response(incident, assessment, result)
 
-        risk = {"score": assessment.score, "severity": assessment.severity.value,
-                "block_seconds": assessment.block_seconds}
+        risk = {
+            "score": assessment.score,
+            "severity": assessment.severity.value,
+            "base_score": assessment.base_score,
+            "base_severity": assessment.base_severity.value,
+            "block_seconds": assessment.block_seconds,
+        }
         response = {**{k: (v.value if hasattr(v, "value") else v)
                        for k, v in asdict(result).items()},
                     "enforced": result.enforced}
