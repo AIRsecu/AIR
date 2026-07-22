@@ -27,9 +27,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:sqlite:/data/shop.db
       # [IR] Discord 웹훅 — 실제 URL 은 .env 에만(커밋 금지). 미설정 시 no-op.
       - AIR_DISCORD_WEBHOOK=${AIR_DISCORD_WEBHOOK:-}
-      # [IR 유입] ir-automation(FastAPI /ingest) 주소 — 미설정 시 앱→IR 전달 no-op.
-      # 예) 같은 호스트에서 uvicorn :8090 이면 http://host.docker.internal:8090/ingest
-      - AIR_IR_INGEST_URL=${AIR_IR_INGEST_URL:-}
+      # [IR 유입] ir-automation 서비스(FastAPI /ingest)로 앱→IR 인시던트 전달.
+      #   기본값 = 같은 compose 네트워크의 ir-automation:8090. 끄려면 .env 에 빈값 지정.
+      - AIR_IR_INGEST_URL=${AIR_IR_INGEST_URL:-http://ir-automation:8090/ingest}
     volumes:
       - airlab-data:/data
     healthcheck:
@@ -52,6 +52,26 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - airlab-net
+
+  # [IR] IR 자동대응 서비스 — 앱→IR 유입(/ingest) → TTL IP차단·Discord·reconcile.
+  #   같은 airlab-net 이라 backend 가 http://ir-automation:8090 으로 도달.
+  #   forward 는 best-effort(앱은 IR 미가동이어도 정상) → backend depends_on 강제 안 함.
+  #   포트는 loopback(127.0.0.1)만 노출 — 외부 비공개(관측/디버그는 호스트에서만).
+  ir-automation:
+    build:
+      context: ./ir-automation
+      dockerfile: Dockerfile
+    container_name: airlab-ir
+    restart: unless-stopped
+    environment:
+      - BLOCK_MODE=simulation
+      - DISCORD_WEBHOOK_URL=${AIR_DISCORD_WEBHOOK:-}
+      - RECONCILE_INTERVAL_SECONDS=30
+      - SERVICE_TIMEZONE=Asia/Seoul
+    ports:
+      - "127.0.0.1:8090:8090"
     networks:
       - airlab-net
 

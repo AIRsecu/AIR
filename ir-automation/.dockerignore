@@ -1,0 +1,13 @@
+# 이미지에 불필요/민감 파일 제외 (시크릿 이미지 포함 방지 + 용량/공격표면 축소)
+.env
+.env.*
+!.env.example
+tests/
+docs/
+incidents/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.git
+.dockerignore
