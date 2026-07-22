@@ -1,13 +1,17 @@
 """위험도 분석 — 앱 `com.shop.air.RiskScoring` 을 그대로 포팅.
 
-점수/등급 표를 앱과 **동일한 값**으로 유지해야 앱 알림과 IR 알림이 어긋나지 않는다.
-(앱이 score 를 넘겨주면 그대로 신뢰하고, 없으면 유형 기반으로 재산정한다.)
+**base parity / effective divergence (하이브리드 정책)**:
+    - ``base_score`` / ``base_severity``: 유형(type) 기준 — 앱 RiskScoring SSOT 와 1:1.
+    - ``score`` / ``severity``: 컨텍스트 가중 반영 effective (기록·관측·Embed용).
+    - **외부 에스컬레이션·차단 게이트**는 base 기준:
+        · Discord CRITICAL 전용 웹훅 → ``base_severity == CRITICAL`` 일 때만
+        · ``should_block`` / ``block_seconds`` → ``base_severity`` (앱과 최대 정합)
 
 컨텍스트 스코어링 확장:
-    base score 위에 endpoint/payload/재범/시간대 가중치를 얹어 최종 [0,100] 산출.
+    base score 위에 endpoint/payload/재범/시간대 가중치를 얹어 effective [0,100] 산출.
     - 함수형 API: assess_with_context(incident, ctx, settings=None)
     - 클래스형 API: RiskAnalyzer(...).assess(incident, ctx)
-    - ctx=None 이면 기존 assess() 와 동일 결과 (하위 호환).
+    - ctx=None 이면 base == effective (하위 호환).
 """
 from __future__ import annotations
 
@@ -56,26 +60,47 @@ def severity(attack_type: str) -> Severity:
 
 @dataclass(frozen=True)
 class RiskAssessment:
-    """analyzer 산출물 — responder/notifier 가 소비."""
+    """analyzer 산출물 — responder/notifier 가 소비.
 
-    score: int
-    severity: Severity
-    block_seconds: int  # 이 등급에 적용할 차단 TTL(초)
+    base_* 는 앱 RiskScoring parity; score/severity 는 컨텍스트 가중 effective.
+    차단·TTL·CRITICAL 웹훅은 base_* 로 게이트한다.
+    """
+
+    base_score: int
+    base_severity: Severity
+    score: int  # effective (컨텍스트 가중)
+    severity: Severity  # effective
+    block_seconds: int  # base_severity 기준 TTL(초)
 
     @property
     def should_block(self) -> bool:
-        # MEDIUM 이상만 네트워크 차단(LOW 는 기록/알림만) — 오차단 최소화
-        return self.severity in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM)
+        # MEDIUM 이상만 네트워크 차단(LOW 는 기록/알림만) — base 기준(앱 정합)
+        return self.base_severity in (
+            Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM,
+        )
+
+
+def _make_assessment(
+    *,
+    base_score: int,
+    effective_score: int,
+    settings: Settings,
+) -> RiskAssessment:
+    base_sev = _severity_from_score(base_score)
+    effective_sev = _severity_from_score(effective_score)
+    return RiskAssessment(
+        base_score=base_score,
+        base_severity=base_sev,
+        score=effective_score,
+        severity=effective_sev,
+        block_seconds=settings.duration_for(base_sev.value),
+    )
 
 
 def assess(incident: Incident, settings: Settings | None = None) -> RiskAssessment:
     settings = settings or get_settings()
-    sev = severity(incident.type)
-    return RiskAssessment(
-        score=score(incident.type),
-        severity=sev,
-        block_seconds=settings.duration_for(sev.value),
-    )
+    base = score(incident.type)
+    return _make_assessment(base_score=base, effective_score=base, settings=settings)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -139,11 +164,11 @@ def assess_with_context(
     """
     컨텍스트 가중치를 반영한 스코어링 (함수형 API).
 
-    - ctx=None 이면 기존 assess(incident, settings) 결과 그대로 반환 → 하위 호환.
-    - 최종 점수: base + endpoint + payload + recidivism + time, [0,100] clamp.
-    - severity 는 최종 점수 기준으로 재판정 (_severity_from_score).
-    - 재범 슬라이딩 윈도우 신호는 함수형 API 에서는 반영 안 됨
-      (인메모리 트래커가 필요하므로 RiskAnalyzer 클래스 경로에서 처리).
+    - ctx=None 이면 base == effective (assess 와 동일).
+    - effective: base + endpoint + payload + recidivism + time, [0,100] clamp.
+    - base_score/base_severity: 유형(type)만 — 앱 parity.
+    - 차단/TTL/CRITICAL 웹훅: base_severity 기준 (effective 로 승격되지 않음).
+    - 재범 슬라이딩 윈도우는 RiskAnalyzer 클래스 경로에서 처리;
       block_hits 는 ctx 에 미리 담겨 있으면 반영.
     """
     settings = settings or get_settings()
@@ -157,7 +182,6 @@ def assess_with_context(
     time_w = _time_weight(ctx.occurred_at, settings)
 
     total = _rules.clamp_score(base + endpoint_w + payload_w + recid_w + time_w)
-    sev = _severity_from_score(total)
 
     _logger.debug(
         "assess_with_context type=%s base=%d ep=+%d pl=+%d%s recid=+%d time=+%d => %d",
@@ -165,10 +189,8 @@ def assess_with_context(
         f"({','.join(matched)})" if matched else "",
         recid_w, time_w, total,
     )
-    return RiskAssessment(
-        score=total,
-        severity=sev,
-        block_seconds=settings.duration_for(sev.value),
+    return _make_assessment(
+        base_score=base, effective_score=total, settings=settings,
     )
 
 
@@ -182,7 +204,8 @@ class RiskAnalyzer:
       ctx=None 이면 기존 assess() 로 위임 (하위 호환).
 
     Thread-safety:
-    - GIL 의존. uvicorn --workers=1 전제.
+    - RecidivismTracker / BlockStore 는 threading.Lock 으로 보호.
+    - sync ingest(FastAPI threadpool) + reconcile(asyncio.to_thread) 동시 접근 안전.
     - 멀티프로세스 배포 시 슬라이딩 윈도우는 프로세스별 파편화되지만,
       BlockStore.hits(영속) 로 장기 신호는 커버됨.
     """
@@ -237,28 +260,26 @@ class RiskAnalyzer:
         total = _rules.clamp_score(
             base + endpoint_w + payload_w + recid_w + time_w
         )
-        sev = _severity_from_score(total)
+        assessment = _make_assessment(
+            base_score=base, effective_score=total, settings=self._settings,
+        )
 
         _logger.info(
             "risk.assess type=%s ip=%s base=%d ep=+%d pl=+%d%s "
-            "recid=+%d(recent=%d,hits=%d) time=+%d => %d(%s)",
+            "recid=+%d(recent=%d,hits=%d) time=+%d => %d(%s, base=%s)",
             incident.type,
             ctx.client_ip or "-",
             base, endpoint_w, payload_w,
             f"({','.join(matched)})" if matched else "",
             recid_w, recent, block_hits, time_w,
-            total, sev.value,
+            total, assessment.severity.value, assessment.base_severity.value,
         )
 
         # 기록은 스코어링 완료 후 — 같은 이벤트가 자기 자신을 재범으로 못 세게
         if ctx.client_ip:
             self._tracker.record(ctx.client_ip)
 
-        return RiskAssessment(
-            score=total,
-            severity=sev,
-            block_seconds=self._settings.duration_for(sev.value),
-        )
+        return assessment
 
     @property
     def tracker(self) -> RecidivismTracker:

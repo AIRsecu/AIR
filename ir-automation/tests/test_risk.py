@@ -33,12 +33,14 @@ def test_severity_bands(atype, expected):
 
 def test_assess_duration_by_severity(settings):
     crit = assess(Incident.model_validate({"type": "SQLI_ATTEMPT"}), settings)
-    assert crit.severity is Severity.CRITICAL
+    assert crit.base_score == crit.score == 95
+    assert crit.base_severity is crit.severity is Severity.CRITICAL
     assert crit.block_seconds == 120  # critical_block_duration
     assert crit.should_block
 
     high = assess(Incident.model_validate({"type": "XSS_ATTEMPT"}), settings)
-    assert high.block_seconds == 60   # default_block_duration
+    assert high.base_severity is Severity.HIGH
+    assert high.block_seconds == 60   # default_block_duration (base HIGH)
     assert high.should_block
 
 

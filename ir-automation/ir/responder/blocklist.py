@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -36,10 +37,14 @@ class BlockEntry:
 
 
 class BlockStore:
-    """IP → BlockEntry 를 JSON 파일로 관리. 프로세스 재시작에도 TTL 이 유지된다."""
+    """IP → BlockEntry 를 JSON 파일로 관리. 프로세스 재시작에도 TTL 이 유지된다.
+
+    threading.Lock — sync ingest + asyncio.to_thread(reconcile) 동시 접근 안전.
+    """
 
     def __init__(self, path: Path):
         self.path = Path(path)
+        self._lock = threading.Lock()
         self._entries: dict[str, BlockEntry] = self._load()
 
     def _load(self) -> dict[str, BlockEntry]:
@@ -73,35 +78,39 @@ class BlockStore:
         남은 TTL 에 가산하지 않는다(누적 연장이 아님).
         """
         now = time.time() if now is None else now
-        existing = self._entries.get(ip)
-        if existing and existing.is_active(now):
-            existing.expires_at = now + ttl_seconds  # 재무장(rearm) — 남은 시간 무시하고 덮어쓰기
-            existing.hits += 1
-            existing.severity = severity  # 최신 등급 반영
+        with self._lock:
+            existing = self._entries.get(ip)
+            if existing and existing.is_active(now):
+                existing.expires_at = now + ttl_seconds  # 재무장(rearm) — 남은 시간 무시하고 덮어쓰기
+                existing.hits += 1
+                existing.severity = severity  # 최신 등급 반영
+                self._persist()
+                return existing, False
+            entry = BlockEntry(
+                ip=ip, reason=reason, severity=severity, mode=mode,
+                incident_id=incident_id, blocked_at=now, expires_at=now + ttl_seconds,
+                hits=(existing.hits + 1) if existing else 1,
+            )
+            self._entries[ip] = entry
             self._persist()
-            return existing, False
-        entry = BlockEntry(
-            ip=ip, reason=reason, severity=severity, mode=mode,
-            incident_id=incident_id, blocked_at=now, expires_at=now + ttl_seconds,
-            hits=(existing.hits + 1) if existing else 1,
-        )
-        self._entries[ip] = entry
-        self._persist()
-        return entry, True
+            return entry, True
 
     def prune(self, now: float | None = None) -> list[BlockEntry]:
         """만료 항목 제거. 제거된 목록 반환(로그/알림용)."""
         now = time.time() if now is None else now
-        expired = [e for e in self._entries.values() if not e.is_active(now)]
-        if expired:
-            for e in expired:
-                self._entries.pop(e.ip, None)
-            self._persist()
-        return expired
+        with self._lock:
+            expired = [e for e in self._entries.values() if not e.is_active(now)]
+            if expired:
+                for e in expired:
+                    self._entries.pop(e.ip, None)
+                self._persist()
+            return expired
 
     def active(self, now: float | None = None) -> list[BlockEntry]:
         now = time.time() if now is None else now
-        return [e for e in self._entries.values() if e.is_active(now)]
+        with self._lock:
+            return [e for e in self._entries.values() if e.is_active(now)]
 
     def get(self, ip: str) -> BlockEntry | None:
-        return self._entries.get(ip)
+        with self._lock:
+            return self._entries.get(ip)

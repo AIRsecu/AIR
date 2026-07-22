@@ -55,12 +55,15 @@ def test_endpoint_weights(endpoint, expected):
 
 
 def test_endpoint_weight_raises_score(settings):
-    """XSS(75) + admin(+15) → 90 CRITICAL."""
+    """XSS(75) + admin(+15) → effective 90 CRITICAL, base HIGH."""
     inc = _incident(type="XSS_ATTEMPT", endpoint="/admin/dashboard", payload="ok")
     ctx = RiskContext.from_incident(inc)
     a = assess_with_context(inc, ctx, settings=settings)
+    assert a.base_score == 75
+    assert a.base_severity is Severity.HIGH
     assert a.score == 90
     assert a.severity is Severity.CRITICAL
+    assert a.block_seconds == settings.duration_for("HIGH")  # base TTL
 
 
 # ── payload ─────────────────────────────────────────────────
@@ -209,3 +212,5 @@ def test_pipeline_uses_context_scoring(settings):
     })
     assert out["risk"]["score"] == 85
     assert out["risk"]["severity"] == "HIGH"
+    assert out["risk"]["base_score"] == 75
+    assert out["risk"]["base_severity"] == "HIGH"

@@ -43,8 +43,22 @@ def _incident(**kwargs) -> Incident:
     return Incident.model_validate(data)
 
 
-def _assessment(sev: Severity = Severity.HIGH, score: int = 75) -> RiskAssessment:
-    return RiskAssessment(score=score, severity=sev, block_seconds=60)
+def _assessment(
+    sev: Severity = Severity.HIGH,
+    score: int = 75,
+    *,
+    base_sev: Severity | None = None,
+    base_score: int | None = None,
+) -> RiskAssessment:
+    base_sev = base_sev or sev
+    base_score = base_score if base_score is not None else score
+    return RiskAssessment(
+        base_score=base_score,
+        base_severity=base_sev,
+        score=score,
+        severity=sev,
+        block_seconds=60,
+    )
 
 
 def _blocked(ip: str = "203.0.113.50") -> BlockResult:
@@ -70,13 +84,15 @@ def test_build_embed_fields_and_color():
     assert "`01HXEMBED`" in emb["fields"][-1]["value"]
 
 
-def test_build_embed_critical_color():
-    emb = _build_embed(
-        _incident(type="SQLI_ATTEMPT"),
-        _assessment(Severity.CRITICAL, 95),
-        _blocked(),
+def test_build_embed_divergence_label():
+    """base HIGH → effective CRITICAL (+context) 표기."""
+    hybrid = _assessment(
+        Severity.CRITICAL, 90,
+        base_sev=Severity.HIGH, base_score=75,
     )
-    assert emb["color"] == 0xFF0000
+    emb = _build_embed(_incident(), hybrid, _blocked())
+    assert emb["description"] == "HIGH → CRITICAL (+context), risk 90"
+    assert emb["color"] == _EMBED_COLOR["CRITICAL"]  # embed color = effective
 
 
 def test_code_safe_strips_backticks():
@@ -96,14 +112,29 @@ def test_webhook_critical_uses_dedicated_url():
     n = DiscordNotifier(_settings(
         discord_webhook_url_critical="https://discord.com/api/webhooks/crit-hook",
     ))
-    assert n._webhook_url_for(Severity.CRITICAL).endswith("crit-hook")
-    assert n._webhook_url_for(Severity.HIGH).endswith("default-hook")
+    crit = _assessment(Severity.CRITICAL, 95)
+    high = _assessment(Severity.HIGH, 75)
+    assert n._webhook_url_for(crit).endswith("crit-hook")
+    assert n._webhook_url_for(high).endswith("default-hook")
+
+
+def test_webhook_effective_critical_base_high_uses_default():
+    """XSS base HIGH + context → effective CRITICAL 이어도 CRITICAL 웹훅 안 탐."""
+    n = DiscordNotifier(_settings(
+        discord_webhook_url_critical="https://discord.com/api/webhooks/crit-hook",
+    ))
+    hybrid = _assessment(
+        Severity.CRITICAL, 90,
+        base_sev=Severity.HIGH, base_score=75,
+    )
+    assert n._webhook_url_for(hybrid).endswith("default-hook")
 
 
 def test_webhook_critical_fallback_warns(caplog):
     n = DiscordNotifier(_settings(discord_webhook_url_critical=None))
+    crit = _assessment(Severity.CRITICAL, 95)
     with caplog.at_level("WARNING", logger="ir.notifier.discord"):
-        url = n._webhook_url_for(Severity.CRITICAL)
+        url = n._webhook_url_for(crit)
     assert url.endswith("default-hook")
     assert "DISCORD_WEBHOOK_URL_CRITICAL" in caplog.text
     assert n._warned_missing_critical is True
@@ -111,10 +142,11 @@ def test_webhook_critical_fallback_warns(caplog):
 
 def test_webhook_critical_fallback_warns_only_once(caplog):
     n = DiscordNotifier(_settings(discord_webhook_url_critical=None))
+    crit = _assessment(Severity.CRITICAL, 95)
     with caplog.at_level("WARNING", logger="ir.notifier.discord"):
-        n._webhook_url_for(Severity.CRITICAL)
+        n._webhook_url_for(crit)
         first = len(caplog.records)
-        n._webhook_url_for(Severity.CRITICAL)
+        n._webhook_url_for(crit)
         second = len(caplog.records)
     assert first >= 1
     assert second == first  # 두 번째 호출에서 WARNING 추가 없음
@@ -125,8 +157,9 @@ def test_webhook_critical_placeholder_treated_as_unset(caplog):
     n = DiscordNotifier(_settings(
         discord_webhook_url_critical="https://discord.com/api/webhooks/[critical-webhook-url-here]",
     ))
+    crit = _assessment(Severity.CRITICAL, 95)
     with caplog.at_level("WARNING", logger="ir.notifier.discord"):
-        url = n._webhook_url_for(Severity.CRITICAL)
+        url = n._webhook_url_for(crit)
     assert url.endswith("default-hook")
 
 

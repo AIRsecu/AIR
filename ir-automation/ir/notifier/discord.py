@@ -50,13 +50,22 @@ def _code_safe(s: str | None) -> str:
     return t[:300] + "…" if len(t) > 300 else t
 
 
+def _severity_label(assessment: RiskAssessment) -> str:
+    """Embed/로그용 등급 라벨 — base/effective divergence 표기."""
+    base = assessment.base_severity.value
+    eff = assessment.severity.value
+    if base != eff:
+        return f"{base} → {eff} (+context)"
+    return eff
+
+
 def _build_content(incident: Incident, assessment: RiskAssessment, result: BlockResult) -> str:
     """Embed 와 함께 보낼 짧은 content(타이틀 한 줄). 클라이언트 호환용."""
-    sev = assessment.severity.value
-    emoji = _EMOJI.get(sev, "⚪")
+    sev_label = _severity_label(assessment)
+    emoji = _EMOJI.get(assessment.severity.value, "⚪")
     return (
         f"{emoji} **[AIR-IR] 사후 대응 완료 — IP 차단** "
-        f"({sev}, risk {assessment.score})"
+        f"({sev_label}, risk {assessment.score})"
     )
 
 
@@ -66,11 +75,11 @@ def _build_embed(
     result: BlockResult,
 ) -> dict:
     """Discord Embed dict. 필드 7개(+ title/description) — API 한도(25) 여유."""
-    sev = assessment.severity.value
+    sev_label = _severity_label(assessment)
     return {
         "title": "[AIR-IR] 사후 대응 완료 — IP 차단",
-        "description": f"{sev}, risk {assessment.score}",
-        "color": _EMBED_COLOR.get(sev, 0x808080),
+        "description": f"{sev_label}, risk {assessment.score}",
+        "color": _EMBED_COLOR.get(assessment.severity.value, 0x808080),
         "fields": [
             {"name": "유형", "value": f"`{_code_safe(incident.type)}`", "inline": True},
             {"name": "차단 IP", "value": f"`{_code_safe(result.ip)}`", "inline": True},
@@ -101,15 +110,16 @@ class DiscordNotifier:
     def enabled(self) -> bool:
         return self.settings.discord_enabled
 
-    def _webhook_url_for(self, severity: Severity | str) -> str | None:
+    def _webhook_url_for(self, assessment: RiskAssessment) -> str | None:
         """
         등급별 웹훅 URL.
 
+        CRITICAL 전용 웹훅은 **base_severity** 기준 (effective 승격 무시).
         CRITICAL + critical URL 유효 → critical
         CRITICAL + critical 미설정 → warning(프로세스당 1회) 후 기본 URL fallback
         그 외 → 기본 URL
         """
-        sev = severity.value if isinstance(severity, Severity) else str(severity)
+        sev = assessment.base_severity.value
 
         def _usable(url: str | None) -> bool:
             return bool(url) and not is_placeholder(url)
@@ -144,7 +154,7 @@ class DiscordNotifier:
         if result.action is not BlockAction.BLOCKED:
             return False  # 연장/예외/저위험은 소음 → 알리지 않음
 
-        url = self._webhook_url_for(assessment.severity)
+        url = self._webhook_url_for(assessment)
         if not url:
             log.debug("[IR] Discord 웹훅 URL 없음 — 알림 skip")
             return False
@@ -164,9 +174,10 @@ class DiscordNotifier:
                 )
                 return False
             log.info(
-                "[IR] Discord 사후대응 알림 전송: %s (%s, %s)",
+                "[IR] Discord 사후대응 알림 전송: %s (%s, base=%s effective=%s)",
                 result.ip,
                 result.mode,
+                assessment.base_severity.value,
                 assessment.severity.value,
             )
             return True
