@@ -21,6 +21,11 @@ ANTHROPIC_VERSION = "2023-06-01"
 GEMINI_MODEL_DEFAULT = "gemini-2.0-flash"
 GROQ_URL          = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL_DEFAULT = "llama-3.3-70b-versatile"
+# 로컬 LLM(Ollama) — OpenAI 호환 엔드포인트(Groq 경로와 동일 스키마). 키 불필요.
+#   활성: AIR_LLM_PROVIDER=ollama|local  또는  OLLAMA_MODEL/OLLAMA_BASE_URL 설정.
+#   OLLAMA_BASE_URL 은 '/v1' 베이스(리포트 seam 과 동일 규약), 없으면 localhost 기본.
+OLLAMA_BASE_DEFAULT  = "http://localhost:11434/v1"
+OLLAMA_MODEL_DEFAULT = "qwen2.5-coder:7b"
 
 PATCH_SYSTEM = (
     "You are AIR's automated security patch engineer for a Spring Boot e-commerce app. "
@@ -42,8 +47,13 @@ CLASSIFY_SYSTEM = (
 
 def _provider():
     p = (os.environ.get("AIR_LLM_PROVIDER") or "").strip().lower()
+    if p in ("ollama", "local"):
+        return "ollama"
     if p in ("anthropic", "gemini", "groq"):
         return p
+    # 로컬 설정이 있으면(모델/엔드포인트) 클라우드 키보다 먼저 채택(멘토 권고: 키 대신 로컬).
+    if os.environ.get("OLLAMA_MODEL") or os.environ.get("OLLAMA_BASE_URL"):
+        return "ollama"
     if os.environ.get("ANTHROPIC_API_KEY"): return "anthropic"
     if os.environ.get("GEMINI_API_KEY"):    return "gemini"
     if os.environ.get("GROQ_API_KEY"):      return "groq"
@@ -97,6 +107,18 @@ def _call_llm(system, user, max_tokens=1500, timeout=120):
             resp = _http(GROQ_URL,
                 {"Content-Type": "application/json",
                  "Authorization": "Bearer " + os.environ["GROQ_API_KEY"]},
+                {"model": model, "max_tokens": max_tokens, "temperature": 0.2,
+                 "messages": [{"role": "system", "content": system},
+                              {"role": "user", "content": user}]}, timeout)
+            ch = resp.get("choices") or []
+            return (ch[0].get("message", {}).get("content") if ch else None) or None
+
+        if prov == "ollama":
+            # 로컬 추론(키 없음). OpenAI 호환 스키마 → Groq 경로와 동일 body.
+            base = os.environ.get("OLLAMA_BASE_URL", OLLAMA_BASE_DEFAULT).rstrip("/")
+            model = os.environ.get("OLLAMA_MODEL", OLLAMA_MODEL_DEFAULT)
+            resp = _http(base + "/chat/completions",
+                {"Content-Type": "application/json"},
                 {"model": model, "max_tokens": max_tokens, "temperature": 0.2,
                  "messages": [{"role": "system", "content": system},
                               {"role": "user", "content": user}]}, timeout)
