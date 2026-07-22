@@ -1,8 +1,12 @@
-# Secure CI Pipeline (`feat/security-gates`)
+# AIR — 자율방어 vuln-lab (`feature/air-defense`)
 
-> GitHub Actions 기반 병렬 보안 스캔 및 Security Gate 자동화.
-> 본 브랜치는 vuln-lab 환경에 대해 **SAST · Dependency Scan · DAST** 를 병렬 수행하고,
-> 결과를 통합 분석하여 Build/PR 단계에서 위험 기반 검증을 수행합니다.
+> **AIR (Automated Incident Response)** — 실시간 위협 대응 DevSecOps 자동화 팀 프로젝트.
+> 본 브랜치(`feature/air-defense`)는 [`feature/web`](../../tree/feature/web)의 취약 앱에
+> **자율방어(AIR)** 를 얹은 적용본이며, `dev` 의 **보안 CI 파이프라인(SAST·SCA·DAST·Gate·리포트)** 과
+> **IR 자동대응 서비스**(`ir-automation/`)를 상속합니다. 공격을 스스로
+> **탐지 → 즉시 차단 → 인시던트 기록 → 위험도 산정 → Discord 경고 → (자동 소스패치)** 로 대응합니다.
+
+> ⚠️ 의도적 취약점을 포함한 **vuln-lab**. 격리 스택(`:8081`)에서 신뢰 IP 로만 구동하세요.
 
 ---
 
