@@ -6,6 +6,8 @@ import xml.etree.ElementTree as ET
 REPORT_PATH = Path("reports/openapi/schemathesis-report.xml")
 OUTPUT_PATH = Path("reports/openapi/schemathesis_for_llm.json")
 
+NOISE_TYPES = ["Undocumented HTTP status code", ]
+
 print("Extracting Schemathesis vulnerabilities for LLM analysis...")
 
 extracted_results = []
@@ -27,7 +29,7 @@ if REPORT_PATH.exists():
         # 정상 테스트는 LLM 분석 대상이 아님
         if failure is None and error is None:
             continue
-        
+
         message = ""
 
         issue_node = failure if failure is not None else error
@@ -42,6 +44,9 @@ if REPORT_PATH.exists():
         classname = testcase.attrib.get("classname", "")
 
         if issue_node is None:
+            continue
+
+        if any(noise in message for noise in NOISE_TYPES):
             continue
 
         extracted_results.append({
