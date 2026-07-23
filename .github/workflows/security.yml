@@ -107,7 +107,19 @@ jobs:
           path: reports/zap/zap-report.json
           if-no-files-found: error
 
-      # schemathesis 실행
+  # ==========================================
+  # 4. schemathesis
+  # ==========================================
+  schemathesis:
+    name: Schemathesis API Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Schemathesis
+        run: pip install schemathesis
+
       - name: Run Schemathesis
         run: |
           chmod +x scripts/security/run-schemathesis.sh
@@ -124,7 +136,7 @@ jobs:
   # 4. 결과 집계 및 보안 게이트
   # ==========================================
   summary:
-    needs: [semgrep, trivy, zap]
+    needs: [semgrep, trivy, zap, schemathesis]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

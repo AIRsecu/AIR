@@ -27,6 +27,7 @@ if REPORT_PATH.exists():
         # 정상 테스트는 LLM 분석 대상이 아님
         if failure is None and error is None:
             continue
+        
         message = ""
 
         issue_node = failure if failure is not None else error

@@ -57,5 +57,8 @@ ir-automation/logs/*
 ir-automation/*.db
 ir-automation/**/__pycache__/
 
-# ── 리포트 파일──────────────────────────────────────────────
+# ── 리포트 파일 ──────────────────────────────────────────────
 reports/
+
+# ── Schemathesis cache ──────────────────────────────────────────────
+.schemathesis/
