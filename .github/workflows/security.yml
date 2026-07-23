@@ -110,8 +110,8 @@ jobs:
       # schemathesis 실행
       - name: Run Schemathesis
         run: |
-          chmod +x scripts/run-schemathesis.sh
-          ./scripts/run-schemathesis.sh
+          chmod +x scripts/security/run-schemathesis.sh
+          ./scripts/security/run-schemathesis.sh
 
       - name: Upload Schemathesis Report
         if: always()
