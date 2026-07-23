@@ -1,0 +1,93 @@
+{
+  "operation": "POST /api/v1/tenants/{tenantId}/orders",
+  "method": "TRACE",
+  "path_template": "/api/v1/tenants/{tenantId}/orders",
+  "fingerprint": "4670c42e",
+  "case_id": "qOZn2x",
+  "code_sample": "curl -X TRACE -H 'Content-Type: application/json' -d '{\"items\": []}' http://localhost:8080/api/v1/tenants/0/orders",
+  "sequence": [
+    {
+      "method": "TRACE",
+      "url": "http://localhost:8080/api/v1/tenants/0/orders",
+      "url_template": "http://localhost:8080/api/v1/tenants/{tenantId}/orders",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "qOZn2x",
+        "Content-Type": "application/json",
+        "Content-Length": "13"
+      },
+      "response": {
+        "status_code": 400,
+        "headers": {
+          "allow": "HEAD, DELETE, POST, GET, OPTIONS, PUT",
+          "content-length": "0",
+          "date": "Thu, 23 Jul 2026 02:40:57 GMT",
+          "connection": "close"
+        },
+        "body": ""
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "unsupported_method",
+          "status": "failure",
+          "message": "Unsupported methods\n\nUnsupported method TRACE returned 400, expected 405 Method Not Allowed\n\nReturn 405 for methods not listed in the OpenAPI spec"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 2.082997525576502e-06,
+          "mode": "negative"
+        },
+        "components": {
+          "PATH": "positive",
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Unspecified HTTP method: TRACE",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "unspecified_http_method"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [
+          [
+            "path",
+            "tenantId"
+          ]
+        ],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {
+          "PATH": {
+            "tenantId": "0"
+          }
+        }
+      },
+      "path": "/api/v1/tenants/{tenantId}/orders",
+      "path_parameters": {
+        "tenantId": "0"
+      },
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "items": []
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}

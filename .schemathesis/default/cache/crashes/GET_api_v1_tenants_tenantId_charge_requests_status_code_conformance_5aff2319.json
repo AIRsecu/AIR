@@ -1,0 +1,100 @@
+{
+  "operation": "GET /api/v1/tenants/{tenantId}/charge-requests",
+  "method": "GET",
+  "path_template": "/api/v1/tenants/{tenantId}/charge-requests",
+  "fingerprint": "5aff2319",
+  "case_id": "aY8ASk",
+  "code_sample": "curl -X GET 'http://localhost:8080/api/v1/tenants/0/charge-requests?status='",
+  "sequence": [
+    {
+      "method": "GET",
+      "url": "http://localhost:8080/api/v1/tenants/0/charge-requests?status=",
+      "url_template": "http://localhost:8080/api/v1/tenants/{tenantId}/charge-requests",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "aY8ASk"
+      },
+      "response": {
+        "status_code": 403,
+        "headers": {
+          "vary": "Origin",
+          "x-content-type-options": "nosniff",
+          "x-xss-protection": "0",
+          "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+          "pragma": "no-cache",
+          "expires": "0",
+          "x-frame-options": "DENY",
+          "content-length": "0",
+          "date": "Thu, 23 Jul 2026 02:40:57 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": ""
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "status_code_conformance",
+          "status": "failure",
+          "message": "Undocumented HTTP status code\n\nReceived: 403\nDocumented: 200"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 4.720799915958196e-05,
+          "mode": "positive"
+        },
+        "components": {
+          "PATH": "positive",
+          "QUERY": "positive"
+        },
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Default positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "default_positive_test"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [
+          [
+            "path",
+            "tenantId"
+          ]
+        ],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {
+          "PATH": {
+            "tenantId": "0"
+          },
+          "QUERY": {
+            "status": ""
+          }
+        }
+      },
+      "path": "/api/v1/tenants/{tenantId}/charge-requests",
+      "path_parameters": {
+        "tenantId": "0"
+      },
+      "query": {
+        "status": ""
+      },
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "none"
+      },
+      "media_type": null,
+      "parent_index": null
+    }
+  ]
+}

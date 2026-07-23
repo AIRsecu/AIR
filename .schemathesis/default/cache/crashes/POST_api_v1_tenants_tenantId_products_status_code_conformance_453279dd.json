@@ -1,0 +1,87 @@
+{
+  "operation": "POST /api/v1/tenants/{tenantId}/products",
+  "method": "POST",
+  "path_template": "/api/v1/tenants/{tenantId}/products",
+  "fingerprint": "453279dd",
+  "case_id": "zLalfE",
+  "code_sample": "curl -X POST -H 'Content-Type: application/json' -d '{\"name\": \"\", \"price\": 0, \"stock\": 0}' http://localhost:8080/api/v1/tenants/0/products",
+  "sequence": [
+    {
+      "method": "POST",
+      "url": "http://localhost:8080/api/v1/tenants/0/products",
+      "url_template": "http://localhost:8080/api/v1/tenants/{tenantId}/products",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "zLalfE",
+        "Content-Type": "application/json",
+        "Content-Length": "36"
+      },
+      "response": {
+        "status_code": 429,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "content-length": "110",
+          "date": "Thu, 23 Jul 2026 02:40:58 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": "{\"success\":false,\"code\":\"SHIELD_BLOCKED\",\"message\":\"\ube44\uc815\uc0c1 \ud65c\ub3d9 \uac10\uc9c0\ub85c \uc77c\uc2dc \ucc28\ub2e8\ub418\uc5c8\uc2b5\ub2c8\ub2e4.\"}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "status_code_conformance",
+          "status": "failure",
+          "message": "Undocumented HTTP status code\n\nReceived: 429\nDocumented: 200"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 0.0012637910040211864,
+          "mode": "positive"
+        },
+        "components": {
+          "PATH": "positive",
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "fuzzing",
+          "data": {
+            "type": "FuzzingPhaseData",
+            "description": "Positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "mutations": []
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/v1/tenants/{tenantId}/products",
+      "path_parameters": {
+        "tenantId": "0"
+      },
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "name": "",
+          "price": 0,
+          "stock": 0
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}

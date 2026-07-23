@@ -1,0 +1,88 @@
+{
+  "operation": "DELETE /api/v1/air/rules/{id}",
+  "method": "TRACE",
+  "path_template": "/api/v1/air/rules/{id}",
+  "fingerprint": "3a6626c7",
+  "case_id": "YTtgNh",
+  "code_sample": "curl -X TRACE http://localhost:8080/api/v1/air/rules/0",
+  "sequence": [
+    {
+      "method": "TRACE",
+      "url": "http://localhost:8080/api/v1/air/rules/0",
+      "url_template": "http://localhost:8080/api/v1/air/rules/{id}",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "YTtgNh",
+        "Content-Length": "0"
+      },
+      "response": {
+        "status_code": 400,
+        "headers": {
+          "allow": "HEAD, DELETE, POST, GET, OPTIONS, PUT",
+          "content-length": "0",
+          "date": "Thu, 23 Jul 2026 02:40:57 GMT",
+          "connection": "close"
+        },
+        "body": ""
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "unsupported_method",
+          "status": "failure",
+          "message": "Unsupported methods\n\nUnsupported method TRACE returned 400, expected 405 Method Not Allowed\n\nReturn 405 for methods not listed in the OpenAPI spec"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 1.7500060494057834e-06,
+          "mode": "negative"
+        },
+        "components": {
+          "PATH": "positive"
+        },
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Unspecified HTTP method: TRACE",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "unspecified_http_method"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [
+          [
+            "path",
+            "id"
+          ]
+        ],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {
+          "PATH": {
+            "id": "0"
+          }
+        }
+      },
+      "path": "/api/v1/air/rules/{id}",
+      "path_parameters": {
+        "id": "0"
+      },
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "none"
+      },
+      "media_type": null,
+      "parent_index": null
+    }
+  ]
+}

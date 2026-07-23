@@ -1,0 +1,82 @@
+{
+  "operation": "GET /api/v1/health",
+  "method": "GET",
+  "path_template": "/api/v1/health",
+  "fingerprint": "ab9f2654",
+  "case_id": "skWlIQ",
+  "code_sample": "curl -X GET http://localhost:8080/api/v1/health",
+  "sequence": [
+    {
+      "method": "GET",
+      "url": "http://localhost:8080/api/v1/health",
+      "url_template": "http://localhost:8080/api/v1/health",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "skWlIQ"
+      },
+      "response": {
+        "status_code": 200,
+        "headers": {
+          "vary": "Origin",
+          "x-content-type-options": "nosniff",
+          "x-xss-protection": "0",
+          "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+          "pragma": "no-cache",
+          "expires": "0",
+          "x-frame-options": "DENY",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "date": "Thu, 23 Jul 2026 02:40:58 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": "{\"status\":\"UP\",\"time\":\"2026-07-23T11:40:58.023936465+09:00[Asia/Seoul]\",\"app\":\"multitenant-shop\"}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "response_schema_conformance",
+          "status": "failure",
+          "message": "Response violates schema\n\n\"multitenant-shop\" is not of type \"object\"\n\nValidated against the response schema for status code 200.\n\nSchema at /additionalProperties:\n\n    {\n        \"type\": \"object\"\n    }\n\nValue:\n\n    \"multitenant-shop\""
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 5.9250000049360096e-05,
+          "mode": "positive"
+        },
+        "components": {},
+        "phase": {
+          "name": "fuzzing",
+          "data": {
+            "type": "FuzzingPhaseData",
+            "description": "Positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "mutations": []
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/v1/health",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "none"
+      },
+      "media_type": null,
+      "parent_index": null
+    }
+  ]
+}

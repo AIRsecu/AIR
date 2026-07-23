@@ -1,0 +1,83 @@
+{
+  "operation": "GET /api/v1/audit/recent",
+  "method": "TRACE",
+  "path_template": "/api/v1/audit/recent",
+  "fingerprint": "35e30a68",
+  "case_id": "CjInpG",
+  "code_sample": "curl -X TRACE 'http://localhost:8080/api/v1/audit/recent?limit=100'",
+  "sequence": [
+    {
+      "method": "TRACE",
+      "url": "http://localhost:8080/api/v1/audit/recent?limit=100",
+      "url_template": "http://localhost:8080/api/v1/audit/recent",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "CjInpG",
+        "Content-Length": "0"
+      },
+      "response": {
+        "status_code": 400,
+        "headers": {
+          "allow": "HEAD, DELETE, POST, GET, OPTIONS, PUT",
+          "content-length": "0",
+          "date": "Thu, 23 Jul 2026 02:40:57 GMT",
+          "connection": "close"
+        },
+        "body": ""
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "unsupported_method",
+          "status": "failure",
+          "message": "Unsupported methods\n\nUnsupported method TRACE returned 400, expected 405 Method Not Allowed\n\nReturn 405 for methods not listed in the OpenAPI spec"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 1.7080019460991025e-06,
+          "mode": "negative"
+        },
+        "components": {
+          "QUERY": "positive"
+        },
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Unspecified HTTP method: TRACE",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "unspecified_http_method"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {
+          "QUERY": {
+            "limit": 100
+          }
+        }
+      },
+      "path": "/api/v1/audit/recent",
+      "path_parameters": {},
+      "query": {
+        "limit": "100"
+      },
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "none"
+      },
+      "media_type": null,
+      "parent_index": null
+    }
+  ]
+}

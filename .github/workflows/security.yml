@@ -107,6 +107,19 @@ jobs:
           path: reports/zap/zap-report.json
           if-no-files-found: error
 
+      # schemathesis 실행
+      - name: Run Schemathesis
+        run: |
+          chmod +x scripts/run-schemathesis.sh
+          ./scripts/run-schemathesis.sh
+
+      - name: Upload Schemathesis Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemathesis-report
+          path: reports/openapi/
+
   # ==========================================
   # 4. 결과 집계 및 보안 게이트
   # ==========================================

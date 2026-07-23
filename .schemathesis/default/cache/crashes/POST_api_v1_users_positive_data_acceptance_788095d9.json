@@ -1,0 +1,82 @@
+{
+  "operation": "POST /api/v1/users",
+  "method": "POST",
+  "path_template": "/api/v1/users",
+  "fingerprint": "788095d9",
+  "case_id": "At1oaf",
+  "code_sample": "curl -X POST -H 'Content-Type: application/json' -d '{\"\\u00c0\\u00d4\\u00b3z\\u0084p\\u00f1\\u00c6\": \"\\u00fb\\ud963\\udc2b\\uda99\\udf26\"}' http://localhost:8080/api/v1/users",
+  "sequence": [
+    {
+      "method": "POST",
+      "url": "http://localhost:8080/api/v1/users",
+      "url_template": "http://localhost:8080/api/v1/users",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "At1oaf",
+        "Content-Type": "application/json",
+        "Content-Length": "76"
+      },
+      "response": {
+        "status_code": 429,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "content-length": "110",
+          "date": "Thu, 23 Jul 2026 02:40:58 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": "{\"success\":false,\"code\":\"SHIELD_BLOCKED\",\"message\":\"\ube44\uc815\uc0c1 \ud65c\ub3d9 \uac10\uc9c0\ub85c \uc77c\uc2dc \ucc28\ub2e8\ub418\uc5c8\uc2b5\ub2c8\ub2e4.\"}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "positive_data_acceptance",
+          "status": "failure",
+          "message": "API rejected schema-compliant request\n\nValid data should have been accepted\nExpected: 2xx, 401, 403, 404, 409, 5xx\nHint: The request body contains 1 additional property not defined in the schema (`\u00c0\u00d4\u00b3z\u0084p\u00f1\u00c6`). The server likely rejects unexpected fields. Add `additionalProperties: false` to your schema to prevent this."
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 0.0004934169992338866,
+          "mode": "positive"
+        },
+        "components": {
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "stateful",
+          "data": {
+            "type": "StatefulPhaseData",
+            "description": "Positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "mutations": []
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/v1/users",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "\u00c0\u00d4\u00b3z\u0084p\u00f1\u00c6": "\u00fb\ud963\udc2b\uda99\udf26"
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}

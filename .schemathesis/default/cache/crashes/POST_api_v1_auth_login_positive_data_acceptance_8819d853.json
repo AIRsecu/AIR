@@ -1,0 +1,222 @@
+{
+  "operation": "POST /api/v1/auth/login",
+  "method": "POST",
+  "path_template": "/api/v1/auth/login",
+  "fingerprint": "8819d853",
+  "case_id": "DFrBx7",
+  "code_sample": "curl -X POST -H 'Content-Type: application/json' -d '{\"password\": \"O\\udb4c\\uded5\\u00de\\u00bf\\u0006\\u009b\\u00a0\\u0016\\u00fe\", \"username\": \"\\u00b8\", \"\\u00c2\\u009b\\udb93\\udd951\\u00fe\\u00a8\\uda76\\udc1c\\ud8f8\\udd41\": [{\"\\u00ec\\u00b2\\u0080\\uda9d\\udcec\\u00a8\\uda3f\\uddeeXJ\\udb60\\uddb2\\u0087\\ud914\\udf76\": [3459070]}, {\"\": null, \"K)\\u0085\": 1.2975827280606372e-61, \"H\\b\": null}, [{\"\\u00c6\\ud8b6\\udd7c\": -20928, \"\\u008b\": [71343, -5.303041296147437e+16, 121]}, []]], \"__main__\": [61015893241, false], \"\\ud9b2\\ude09\\ud861\\udced\": [{\"\\u00b5\\u00d0]\\u00b5\\u00c8\\u00f4\\u00e0\\u000ez}\\u009b\": null, \"\\u00d3\\u00a4'\"'\"'\\ud8d8\\udcd9\\u00a3\\udbf2\\udd99\\u0002\\u00fb\\u0084\\udbc5\\udde4\\u0002J\": {}, \"\": {\"\\u00ac\": 1118599, \"\\udb0c\\udf25\\u00f4\\u00d4'\"'\"'I\": \"x\\udaaf\\udeae\"}}, [\"~\\u00e8F\\u00e3JXN\\uda7f\\udd5a%\\ud9fa\\udd06\", [\"\", true]], {\"\\udbe8\\udede\\ud97e\\udc56\\u00df:F\\u00d9\\ud872\\udde3$V\\u00b5\\u00b6T78\": []}], \" \\u009a\": {\"`\": [], \"\\u0015\\u00bd\\u00f6^\\u00d3\": [], \"\\\"*\\u00b3\\u007f\": [-1.7976931348623157e+308, true, null]}, \"\\u00d5\": {\"V~\": \"\\b5\\u0013\\u0018\\u00cc\\udb4e\\udcaa\\u00e9\\u00de\\u0005\\u001b\", \"$\\u00d4\": 8253710389787091.0, \"\\b\\ud8c0\\udf88\\u0097\\u00f7\\n\\u00db\": -15903033614}, \"\\u00ec\\u00d8\\u008a\\u00d8\": true, \"\\u009cm{\": [{\"\\u00e4\\ud84b\\udcd8\\u0019\\u00bf9@\": -38836, \"\": 146290, \"\\u00ac\": [false, null, 5.800816447977309e+16]}, [1.3635060667543542e-244, [[1.7132647834840176e+16], [144115188075855871], {\"\": 51261, \"\\u00f4\\u00e7e\\u00bb\\u00e6\\ud8a3\\uddc0\\u00b37\": null, \"\\u0014\\uda97\\udc78\\u00c6\\u00a3@\\u00dd\\udb24\\udd36\": \"\\udaa1\\uddcf\\u0000\\u00b1R8\\ud8f0\\ude9cn\\u00d6\\udafa\\ude24\\u00f8\\ud99d\\udd91\\u4726\\udbd2\\ude09\"}]], {}], \"\\ud80f\\udddb!a\\ud849\\udda4^*\": [-16160827, null], \"O\\u00d7QT\\u0014\\udb1a\\ude74\\u00afz\\u00beU\": {\"J,\\u0096\\udbc3\\udf3a\\u00c7\\u0007\\u0086\\u00fd\\u00ba\\u00cf\\u008eI\": [-2555903492], \"\\ud9c9\\udfcfD\\ud845\\udccd$t\": [{\"\": null}, null], \"\\u00df\\u0000\\u0011\\udae0\\udef9\\uda56\\udf8d\": {\"\\u000bG\": {\"{\": -3.6875718051651676e+173}}}, \"\\ud98c\\udf3a\\u00e1K\\uda44\\udc5a2\\u8677\\uda80\\udc62\": [{\"\\udaa7\\udf76\\u00c6\\ud8bd\\udd61\\u0083C\\u00dd[\\u0005p\\udad1\\udf91\\u0018\\u00f3\\u00a9\\u0090\\u00d8\\ud85a\\udcc4\\u00f22\": {}, \"\": [-4398046511104, true], \"0..0\": [null]}, [[{\"\": -909, \"\\u00fd\\u00fe\\uda3a\\udc74\\u00af\\u0097\": 240768594, \"\\ud948\\udd64'\"'\"'\\u00fd\\u00fc\\udb48\\udc04\": null}, null, []]], false], \"\\udaaf\\ude8d\": {\"\\ud953\\udc5b\\uda8c\\ude0c\\ud8ca\\ude26\\u00c1\": -123, \"\\u00f3V\\u00e0\\u00c9I\\u00e8\\udb53\\udd7b+\\u00dc\\ud82c\\udcd2ry\\u00fbZ\\uda42\\udce1\": -8.93905683116121e+225, \" \\u008a\": \"\\u00b0\\u0096\\u00f3\\udbc3\\udfb4K\\u00df\\u00db\"}}' http://localhost:8080/api/v1/auth/login",
+  "sequence": [
+    {
+      "method": "POST",
+      "url": "http://localhost:8080/api/v1/auth/login",
+      "url_template": "http://localhost:8080/api/v1/auth/login",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "DFrBx7",
+        "Content-Type": "application/json",
+        "Content-Length": "2466"
+      },
+      "response": {
+        "status_code": 429,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "content-length": "110",
+          "date": "Thu, 23 Jul 2026 02:40:58 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": "{\"success\":false,\"code\":\"SHIELD_BLOCKED\",\"message\":\"\ube44\uc815\uc0c1 \ud65c\ub3d9 \uac10\uc9c0\ub85c \uc77c\uc2dc \ucc28\ub2e8\ub418\uc5c8\uc2b5\ub2c8\ub2e4.\"}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "positive_data_acceptance",
+          "status": "failure",
+          "message": "API rejected schema-compliant request\n\nValid data should have been accepted\nExpected: 2xx, 401, 403, 404, 409, 5xx\nHint: The request body contains 11 additional properties not defined in the schema (` \u009a`, `O\u00d7QT\u0014\udb1a\ude74\u00afz\u00beU`, `__main__` and 8 more). The server likely rejects unexpected fields. Add `additionalProperties: false` to your schema to prevent this."
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 0.01649916699534515,
+          "mode": "positive"
+        },
+        "components": {
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "stateful",
+          "data": {
+            "type": "StatefulPhaseData",
+            "description": "Positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "mutations": []
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/v1/auth/login",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "password": "[Filtered]",
+          "username": "\u00b8",
+          "\u00c2\u009b\udb93\udd951\u00fe\u00a8\uda76\udc1c\ud8f8\udd41": [
+            {
+              "\u00ec\u00b2\u0080\uda9d\udcec\u00a8\uda3f\uddeeXJ\udb60\uddb2\u0087\ud914\udf76": [
+                3459070
+              ]
+            },
+            {
+              "": null,
+              "K)\u0085": 1.2975827280606372e-61,
+              "H\b": null
+            },
+            [
+              {
+                "\u00c6\ud8b6\udd7c": -20928,
+                "\u008b": [
+                  71343,
+                  -5.303041296147437e+16,
+                  121
+                ]
+              },
+              []
+            ]
+          ],
+          "__main__": [
+            61015893241,
+            false
+          ],
+          "\ud9b2\ude09\ud861\udced": [
+            {
+              "\u00b5\u00d0]\u00b5\u00c8\u00f4\u00e0\u000ez}\u009b": null,
+              "\u00d3\u00a4'\ud8d8\udcd9\u00a3\udbf2\udd99\u0002\u00fb\u0084\udbc5\udde4\u0002J": {},
+              "": {
+                "\u00ac": 1118599,
+                "\udb0c\udf25\u00f4\u00d4'I": "x\udaaf\udeae"
+              }
+            },
+            [
+              "~\u00e8F\u00e3JXN\uda7f\udd5a%\ud9fa\udd06",
+              [
+                "",
+                true
+              ]
+            ],
+            {
+              "\udbe8\udede\ud97e\udc56\u00df:F\u00d9\ud872\udde3$V\u00b5\u00b6T78": []
+            }
+          ],
+          " \u009a": {
+            "`": [],
+            "\u0015\u00bd\u00f6^\u00d3": [],
+            "\"*\u00b3\u007f": [
+              -1.7976931348623157e+308,
+              true,
+              null
+            ]
+          },
+          "\u00d5": {
+            "V~": "\b5\u0013\u0018\u00cc\udb4e\udcaa\u00e9\u00de\u0005\u001b",
+            "$\u00d4": 8253710389787091.0,
+            "\b\ud8c0\udf88\u0097\u00f7\n\u00db": -15903033614
+          },
+          "\u00ec\u00d8\u008a\u00d8": true,
+          "\u009cm{": [
+            {
+              "\u00e4\ud84b\udcd8\u0019\u00bf9@": -38836,
+              "": 146290,
+              "\u00ac": [
+                false,
+                null,
+                5.800816447977309e+16
+              ]
+            },
+            [
+              1.3635060667543542e-244,
+              [
+                [
+                  1.7132647834840176e+16
+                ],
+                [
+                  144115188075855871
+                ],
+                {
+                  "": 51261,
+                  "\u00f4\u00e7e\u00bb\u00e6\ud8a3\uddc0\u00b37": null,
+                  "\u0014\uda97\udc78\u00c6\u00a3@\u00dd\udb24\udd36": "\udaa1\uddcf\u0000\u00b1R8\ud8f0\ude9cn\u00d6\udafa\ude24\u00f8\ud99d\udd91\u4726\udbd2\ude09"
+                }
+              ]
+            ],
+            {}
+          ],
+          "\ud80f\udddb!a\ud849\udda4^*": [
+            -16160827,
+            null
+          ],
+          "O\u00d7QT\u0014\udb1a\ude74\u00afz\u00beU": {
+            "J,\u0096\udbc3\udf3a\u00c7\u0007\u0086\u00fd\u00ba\u00cf\u008eI": [
+              -2555903492
+            ],
+            "\ud9c9\udfcfD\ud845\udccd$t": [
+              {
+                "": null
+              },
+              null
+            ],
+            "\u00df\u0000\u0011\udae0\udef9\uda56\udf8d": {
+              "\u000bG": {
+                "{": -3.6875718051651676e+173
+              }
+            }
+          },
+          "\ud98c\udf3a\u00e1K\uda44\udc5a2\u8677\uda80\udc62": [
+            {
+              "\udaa7\udf76\u00c6\ud8bd\udd61\u0083C\u00dd[\u0005p\udad1\udf91\u0018\u00f3\u00a9\u0090\u00d8\ud85a\udcc4\u00f22": {},
+              "": [
+                -4398046511104,
+                true
+              ],
+              "0..0": [
+                null
+              ]
+            },
+            [
+              [
+                {
+                  "": -909,
+                  "\u00fd\u00fe\uda3a\udc74\u00af\u0097": 240768594,
+                  "\ud948\udd64'\u00fd\u00fc\udb48\udc04": null
+                },
+                null,
+                []
+              ]
+            ],
+            false
+          ],
+          "\udaaf\ude8d": {
+            "\ud953\udc5b\uda8c\ude0c\ud8ca\ude26\u00c1": -123,
+            "\u00f3V\u00e0\u00c9I\u00e8\udb53\udd7b+\u00dc\ud82c\udcd2ry\u00fbZ\uda42\udce1": -8.93905683116121e+225,
+            " \u008a": "\u00b0\u0096\u00f3\udbc3\udfb4K\u00df\u00db"
+          }
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}

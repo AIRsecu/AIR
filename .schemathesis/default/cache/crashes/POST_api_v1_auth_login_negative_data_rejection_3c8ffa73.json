@@ -1,0 +1,123 @@
+{
+  "operation": "POST /api/v1/auth/login",
+  "method": "POST",
+  "path_template": "/api/v1/auth/login",
+  "fingerprint": "3c8ffa73",
+  "case_id": "8KozCr",
+  "code_sample": "curl -X POST -H 'Content-Type: application/json' -d '{\"username\": \"TRUE\", \"\\u00e3\": {\":\\uda64\\udce4l\\u0095\\ud965\\udf8d\\u0005\\u00ce\\u0082\\udb69\\udfde`c\\u00ec\\u00a8\\u00a2\\t\": {\"\\u00ce\": {\"<\\udbf2\\udfb8\": null, \"*x\\ud8be\\udfe6F\\u00f0\\u00a6\": null, \"\\u0088u\\u001d\\u00ec\\u008b\\udaca\\udfabw\\ud998\\udc29O\": -20132}, \"\\u00bf1%Yf\\u0094F\": {\"\\fv\": -5.960464477539063e-08}, \"\\u0083\\udab4\\udfc9\\u00cf\\u00f3\\u0003\\udb48\\udfdb\\udbd8\\udf5e+\": []}}}' http://localhost:8080/api/v1/auth/login",
+  "sequence": [
+    {
+      "method": "POST",
+      "url": "http://localhost:8080/api/v1/auth/login",
+      "url_template": "http://localhost:8080/api/v1/auth/login",
+      "headers": {
+        "User-Agent": "schemathesis/4.24.2",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Schemathesis-TestCaseId": "8KozCr",
+        "Content-Type": "application/json",
+        "Content-Length": "380"
+      },
+      "response": {
+        "status_code": 429,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "content-length": "110",
+          "date": "Thu, 23 Jul 2026 02:40:59 GMT",
+          "keep-alive": "timeout=60",
+          "connection": "keep-alive"
+        },
+        "body": "{\"success\":false,\"code\":\"SHIELD_BLOCKED\",\"message\":\"\ube44\uc815\uc0c1 \ud65c\ub3d9 \uac10\uc9c0\ub85c \uc77c\uc2dc \ucc28\ub2e8\ub418\uc5c8\uc2b5\ub2c8\ub2e4.\"}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "negative_data_rejection",
+          "status": "failure",
+          "message": "API accepted schema-violating request\n\nInvalid data should have been rejected\nExpected: 400, 401, 403, 404, 405, 406, 409, 422, 428, 5xx\nInvalid component: in body - violates `required` (was \"\u00d3\")"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 0.001654792002227623,
+          "mode": "negative"
+        },
+        "components": {
+          "BODY": "negative"
+        },
+        "phase": {
+          "name": "stateful",
+          "data": {
+            "type": "StatefulPhaseData",
+            "description": "violates `required` (was \"\u00d3\")",
+            "location": null,
+            "parameter": null,
+            "parameter_location": "BODY",
+            "mutations": [
+              {
+                "path": [],
+                "schema_pointer": "",
+                "channel": "value",
+                "operator": "value_violator",
+                "keywords": [
+                  "required"
+                ],
+                "parameter": null,
+                "original_value": "\u00d3",
+                "new_value": {
+                  "username": "TRUE",
+                  "\u00e3": {
+                    ":\uda64\udce4l\u0095\ud965\udf8d\u0005\u00ce\u0082\udb69\udfde`c\u00ec\u00a8\u00a2\t": {
+                      "\u00ce": {
+                        "<\udbf2\udfb8": null,
+                        "*x\ud8be\udfe6F\u00f0\u00a6": null,
+                        "\u0088u\u001d\u00ec\u008b\udaca\udfabw\ud998\udc29O": -20132
+                      },
+                      "\u00bf1%Yf\u0094F": {
+                        "\fv": -5.960464477539063e-08
+                      },
+                      "\u0083\udab4\udfc9\u00cf\u00f3\u0003\udb48\udfdb\udbd8\udf5e+": []
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/v1/auth/login",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {},
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "username": "TRUE",
+          "\u00e3": {
+            ":\uda64\udce4l\u0095\ud965\udf8d\u0005\u00ce\u0082\udb69\udfde`c\u00ec\u00a8\u00a2\t": {
+              "\u00ce": {
+                "<\udbf2\udfb8": null,
+                "*x\ud8be\udfe6F\u00f0\u00a6": null,
+                "\u0088u\u001d\u00ec\u008b\udaca\udfabw\ud998\udc29O": -20132
+              },
+              "\u00bf1%Yf\u0094F": {
+                "\fv": -5.960464477539063e-08
+              },
+              "\u0083\udab4\udfc9\u00cf\u00f3\u0003\udb48\udfdb\udbd8\udf5e+": []
+            }
+          }
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}
