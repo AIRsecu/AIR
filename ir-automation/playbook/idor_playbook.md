@@ -35,6 +35,14 @@
 - IP 없으면 차단 스킵 + Discord도 신규 BLOCKED가 아니므로 사후 웹훅 미전송 가능  
   → 앱 Discord(탐지 알림)와 IR Discord(사후 대응) 역할 분리 유지
 
+## 알려진 한계
+
+- IR IP 차단은 **인증 세션 공격**(IDOR)에 부적합
+- user-level 차단·세션 무효화는 앱 레이어 (`authz.idor-guard`) 담당
+- `report()` 호출부에서 `clientIp=null, actor=username`로 전달됨 (`OrderService` 실측)
+- IR는 IP 있을 때만 2차 격리 (`SKIPPED_NO_IP` 정상)
+- `actor=username`은 기록되지만 IR가 user 차단 액션 없음 (설계상)
+
 ## Notify
 
 | 계층 | 채널 | 트리거 |

@@ -23,6 +23,27 @@
 | `DetectionFilter.java:189 (@{{SHORT}})` | product write URI · `XSS_SIGNATURE` → `report("XSS_ATTEMPT", …)` |
 | `IncidentService.report()` | `xss.input-guard` arming + IR forward |
 
+## 공격 분류 (현 탐지 지점 = product write body)
+
+| 유형 | 현 IR/필터 탐지 | 본질 방어 |
+|------|-----------------|-----------|
+| Stored (product write body 페이로드) | ✅ 저장 시점 IP 차단 유효 | 저장 시점 sanitize + 출력 인코딩 |
+| Reflected (검색 q 등 즉시 에코) | 🔴 **현 탐지 지점 아님** | 출력 인코딩 |
+| DOM-based | 🔴 IR 관측 불가 (서버 미경유) | 클라이언트 sanitize + CSP |
+
+> 현 `XSS_SIGNATURE`는 `PRODUCT_WRITE` URI (POST/PATCH body)에서만 검사.  
+> 검색 반영 XSS(Reflected)는 별도 탐지 트랙 필요 — 현재 이 playbook 범위 밖.  
+> **본질 방어는 출력 인코딩 (OWASP Java Encoder) + CSP 헤더** (앱/인프라).  
+> IR는 최초 저장 요청·반복 요청의 IP 격리에만 유효.
+
+## 알려진 한계
+
+- **Stored (write body)**: IR가 최초 저장 요청 IP 차단 (`DetectionFilter`가 `clientIp` 전달)
+- **이미 DB에 저장된 페이로드 정화**: IR 밖 (앱 DB 스캔·재인코딩 배치)
+- **Reflected 검색 반영형**: 현 탐지 시그니처 밖
+- **DOM XSS**: 서버 미경유
+- **CSP 정책**: 인프라/앱 소관 (IR 밖, 인수인계 §3)
+
 ## Analyze (IR)
 
 - `normalize` → `RiskAnalyzer.assess` → `base_score=75` / `base_severity=HIGH`

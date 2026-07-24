@@ -28,6 +28,55 @@
 > 이 경로의 `report(..., clientIp=null, …)` 이므로 IR IP 차단은 `SKIPPED_NO_IP` 일 수 있다.  
 > **1차 방어는 업로드 가드 arming**이며, IR는 기록·(IP 있을 때) 2차 격리.
 
+## UPLOAD_MALICIOUS_FILE (as-implemented)
+
+### Detect 단계 (`store`, `checkExt=true`)
+
+- 원본 파일명 확장자 → `DANGEROUS_EXT`(`jsp`, `war`, `sh`, `php`, …) 포함 시 report
+- `shell.jpg.jsp` → `extOf=jsp` ∈ DANGEROUS_EXT → ✅ 탐지
+- 경로조작 문자(`..`/`/`/`\`)가 파일명에 있어도 **report type은 항상 `UPLOAD_MALICIOUS_FILE`**  
+  (`store`가 type을 고정 전달). `UPLOAD_PATH_TRAVERSAL`로 바뀌지 않음
+- 트리거 조건: `traversal || badExt` (OR). 확장자만 “우선”이 아니라 둘 중 하나면 report
+
+### Contain 단계 (가드 ON, store)
+
+- ALLOWED 확장자 화이트리스트 (`png`, `jpg`, `jpeg`, `gif`, `webp`)
+- 2MB 크기 제한
+- basename 추출 + 랜덤명 부여
+- `Path.normalize()` + `startsWith(baseDir)` 보조
+
+## UPLOAD_PATH_TRAVERSAL (as-implemented)
+
+### Detect 단계 (`read`, `checkExt=false`)
+
+- `..`, `/`, `\` **문자열 매칭만** → `report(UPLOAD_PATH_TRAVERSAL)`
+- **`DANGEROUS_EXT` / 확장자 검사 없음** (`checkExt=false`)
+- `UPLOAD_MALICIOUS_FILE` type으로 report하지 않음
+
+> Unix JVM의 `Path.normalize()`는 백슬래시를 구분자로 처리하지 않음.  
+> `\` 탐지는 **문자열 매칭 (Detect)** 이 담당.
+
+### Contain 단계 (가드 ON, **read**)
+
+read 경로 Contain은 아래만 해당:
+
+1. **basename 추출** — `/` 와 `\` **둘 다 구분자**  
+   - `../../../etc/passwd` → `passwd`  
+   - `..\\..\\file.txt` → `file.txt`  
+   - 코드: `Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\'))`
+2. **`Path.normalize()` + `startsWith(baseDir)`** — 보조 검증
+
+(화이트리스트·2MB·랜덤명은 **store** Contain; PATH read와 무관)
+
+취약 재현 (가드 OFF): basename 미적용 → 원본 경로로 FS 접근 시도.  
+재현: `dast/attacks/upload_attack.py --base http://localhost:8081`
+
+## 권장 hardening (미구현, 별도 트랙)
+
+- Magic bytes 검증 · Polyglot 스캔 · MIME sniffing
+- ClamAV 연동 → **IR/본 playbook 밖** (인프라 소관, 인수인계 §3)
+- URL/이중 인코딩·Unicode·null byte·symlink — 컨테이너 디코딩·인프라 정책 검증 권장
+
 ## Analyze (IR)
 
 - `UPLOAD_MALICIOUS_FILE`: base 90 CRITICAL → CRITICAL TTL·CRITICAL 웹훅 후보

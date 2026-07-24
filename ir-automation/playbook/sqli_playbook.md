@@ -23,6 +23,20 @@
 
 가드 OFF일 때만 시그니처 탐지 경로가 의미 있다(탐지 ON + 가드 OFF = 취약 재현·자동 arming).
 
+## 공격 변종 (현 `SQLI_SIGNATURE` as-implemented)
+
+| 유형 | 현 시그니처 탐지 | 본질 방어 |
+|------|------------------|-----------|
+| Classic in-band (UNION, OR 1=1, --, DROP) | ✅ 시그니처 매칭 | PreparedStatement |
+| Union-based | ✅ 시그니처 매칭 | 동일 |
+| Boolean blind (분기 응답만) | 🔴 미탐 (시그니처 밖) | 동일 |
+| Time blind (SLEEP/BENCHMARK) | 🔴 미탐 (시그니처 밖) | 쿼리 타임아웃 + WAF |
+| Second-order (저장 후 실행) | 🔴 IR 관측 불가 | 저장 시점 검증 |
+
+> **본질 방어는 PreparedStatement/ORM parameterized 쿼리** (앱 레이어).  
+> Blind 계열은 현 시그니처로 탐지 불가 — 재범 가중은 스코어링이지 탐지 아님.  
+> 시그니처 확장 or WAF 도입은 별도 트랙.
+
 ## Analyze (IR)
 
 | 모듈 | 링크 |
@@ -61,6 +75,56 @@ IR 범위 밖. `air-orchestrator` 가 소스 패치·검증·재배포를 담당
   - 대상 파일: `ProductService.java`
   - defense_key: `sql.injection-guard`
   - scenario: `sqli`
+
+## Escalation (CRITICAL 전용, SQLI 특화)
+
+자동 IP 차단만으로 완결 X. 온콜 담당자 수동 확인:
+
+### 1. 유입 정보 조사 (as-implemented, 이 레포에서 됨)
+
+**앱 인시던트 API:**
+
+```
+GET /api/v1/air/incidents
+```
+
+**IR JSON (연동 시):**
+
+```
+${INCIDENT_STORAGE_PATH:-./incidents}/<id>.json
+```
+
+**확인 필드 (실측 계약):**
+
+- `payload` — 시그니처 매칭 내용. 검색어는 여기에 `q=<검색어>` 로 실림 (`report(..., "q=" + q)`)
+- `endpoint` — 취약 지점 URI만 (`getRequestURI`, 쿼리스트링 미포함)
+- `clientIp` — 공격 IP
+- `createdAt` (앱) / `recorded_at` (IR store) — 시각
+- 재범 여부: 동일 `clientIp`의 다른 인시던트 상관관계
+
+### 2. DB 이상 조사 (권장 운영, 인프라/DBA 협조)
+
+> 이 레포 as-implemented 아님. 프로덕션 인프라 별도 트랙.
+
+- **유출 의심**: DB audit log에서 해당 시간창 SELECT 이력 (인프라 소관)
+- **변조 의심**: DML(INSERT/UPDATE/DELETE) 이력 (인프라 소관)
+- **Blind SQLi 조사**: DB 슬로우 쿼리 로그
+  - `SLEEP()`, `BENCHMARK()`, `WAITFOR DELAY` 시그니처
+  - IR 미탐 계열이므로 **로그 조사 필수**
+  - vuln-lab 미탑재, 프로덕션 인프라에 요청
+
+### 3. 패치 상태 확인 (as-implemented)
+
+- 가드: `GET /api/v1/air/defenses` — `sql.injection-guard` ON 여부
+- PreparedStatement/ORM: `ProductService.java` 패치 커밋 (orchestrator 트랙)
+
+### 4. 사후 리뷰 (as-implemented)
+
+- 앱 incidents API 시계열 조회
+- 동일 IP의 다른 유형 인시던트 상관관계
+
+> **주의**: 자동 IP 차단은 신규 시도만 막음.  
+> 이미 실행된 쿼리로 인한 데이터 침해는 IR 밖 — DB·앱 로그 조사 필수.
 
 ## 검증 · 롤백
 

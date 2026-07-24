@@ -23,6 +23,16 @@
 
 탐지(필터)와 가드(서비스)가 분리되어 있다. 보고 시 `IncidentService` 가 가드를 즉시 ON.
 
+## 공격 변종 (DTO=`Integer quantity`, as-implemented)
+
+- `quantity: -1` (기본 음수)
+- `quantity: 0` (총액 0원 우회 시도)
+- `quantity: -2147483648` (Integer.MIN_VALUE 언더플로우)
+
+(`1e-10` 등 float 우회는 DTO 바인딩 400 예상 — 이 코드베이스에서 미검증)
+
+→ **본질 방어**: 서비스 레이어 strict positive integer 검증 (`order.qty-guard`)
+
 ## Analyze (IR)
 
 - base 85 / HIGH
@@ -66,9 +76,9 @@ poetry run pytest ir-automation/tests/test_risk.py -q
 python dast/attacks/neg_qty_attack.py --base http://localhost:8081
 ```
 
-### 수동 재현 (curl)
+### 시나리오 A: 탐지 ON (프로덕션 기본)
 
-시나리오별 기대결과는 Detect 이후 보완 섹션·검증 상세를 따른다. 엔드포인트/DTO:
+필터가 `report` → `IncidentService.report()`가 동기 arming → **같은 요청부터 400**.
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/tenants/{tid}/orders \
@@ -77,10 +87,30 @@ curl -X POST http://localhost:8081/api/v1/tenants/{tid}/orders \
   -d '{"items":[{"productId":"<pid>","quantity":-1}]}'
 ```
 
+- 응답: **400** `AppException.badRequest`
+- 가드 상태: `order.qty-guard = ON` (자동 arming)
+- 인시던트 확인 (2계층):
+  1. **앱 DB (항상 생성 — SSOT):** `GET /api/v1/air/incidents`
+  2. **IR JSON (조건부):** `AIR_IR_INGEST_URL` 설정 + IR 기동 + `IrForwarder` 성공일 때만  
+     `${INCIDENT_STORAGE_PATH:-./incidents}/<id>.json`  
+     → 파일 없음 ≠ 인시던트 없음 (앱 DB 확인 우선)
+
+### 시나리오 B: 탐지 OFF + 가드 OFF (vuln-lab 재현)
+
+의도적 취약 재현 모드. 사전: `air.detection` OFF, `order.qty-guard` OFF.
+
+```bash
+curl -X POST http://localhost:8081/api/v1/tenants/{tid}/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"productId":"<pid>","quantity":-1}]}'
+```
+
+- 응답: **200** + total 음수 계산 (취약)
+- 인시던트: 미생성 (탐지 OFF)
+
 ### 결과 확인
 
-- 앱 DB (항상): `GET /api/v1/air/incidents`
-- IR JSON (조건부): `${INCIDENT_STORAGE_PATH:-./incidents}/<id>.json`
 - 필드: `type`, `risk.base_severity`, `response.action`, `playbook.recover=false`
 
 ### 롤백

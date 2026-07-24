@@ -58,6 +58,18 @@
 - 운영 회복: 가드 유지·손상 데이터/권한 점검·필요 시 백업 복구(앱·인프라 절차; IR 코드 밖).
 - `incident_store` `recover: False` 유지.
 
+## Escalation (CRITICAL 전용)
+
+자동 IP 차단만으로 완결 X. 온콜 담당자 수동 확인:
+
+1. **삭제된 리소스 범위** — audit log 조회 (인프라/앱 로그)
+2. **인증 세션 여부** — 계정 잠금 검토 (앱 레이어)
+3. **백업 복구 결정** — 인프라팀 런북 참조 (IR 밖)
+4. **사후 리뷰** — 앱 `GET /api/v1/air/incidents` (SSOT) 또는  
+   `${INCIDENT_STORAGE_PATH:-./incidents}/<id>.json` (IR 연동 시)
+
+→ 볼륨 DDoS와 달리 **개별 인시던트 사후 검토 필수** (CRITICAL 등급)
+
 ## 검증 · 롤백
 
 ### 유닛
