@@ -20,7 +20,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:189 (@{{SHORT}})` | product write URI · `XSS_SIGNATURE` → `report("XSS_ATTEMPT", …)` |
+| `DetectionFilter.java:189 (@a94a8dd)` | product write URI · `XSS_SIGNATURE` → `report("XSS_ATTEMPT", …)` |
 | `IncidentService.report()` | `xss.input-guard` arming + IR forward |
 
 ## 공격 분류 (현 탐지 지점 = product write body)

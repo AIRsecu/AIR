@@ -18,7 +18,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:178 (@{{SHORT}})` | `GET` + product search URI · `SQLI_SIGNATURE` → `report("SQLI_ATTEMPT", …)` |
+| `DetectionFilter.java:178 (@a94a8dd)` | `GET` + product search URI · `SQLI_SIGNATURE` → `report("SQLI_ATTEMPT", …)` |
 | `IncidentService.java` (~43–80) | 가드 arming · DB 기록 · Discord(앱) · `IrForwarder` → IR `/ingest` |
 
 가드 OFF일 때만 시그니처 탐지 경로가 의미 있다(탐지 ON + 가드 OFF = 취약 재현·자동 arming).

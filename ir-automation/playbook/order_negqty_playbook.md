@@ -18,7 +18,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:216 (@{{SHORT}})` `detectNegativeQty` | 주문 생성 POST 본문 `items[].quantity <= 0` → `report("ORDER_NEGATIVE_QTY", …)` |
+| `DetectionFilter.java:216 (@a94a8dd)` `detectNegativeQty` | 주문 생성 POST 본문 `items[].quantity <= 0` → `report("ORDER_NEGATIVE_QTY", …)` |
 | `OrderService` 생성 경로 | `order.qty-guard` ON 시 라인 수량 거부; OFF 시 취약(음수 total) |
 
 탐지(필터)와 가드(서비스)가 분리되어 있다. 보고 시 `IncidentService` 가 가드를 즉시 ON.

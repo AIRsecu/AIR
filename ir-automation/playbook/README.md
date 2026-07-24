@@ -91,7 +91,7 @@
 각 문서의 `@<short-sha>`는 **문서 작성 시점 검증 기준**입니다.  
 리팩터로 라인 밀림 시 하단 `rg` 명령으로 재확인 후 patch-set 갱신.
 
-작성 중 placeholder: `@{{SHORT}}` — PR push 직전(또는 로컬 pin 커밋)에 short SHA로 치환.
+현재 문서 앵커: `@a94a8dd` (README 커밋 시점 short SHA로 pin).
 
 ## 파일:라인 인용 정책
 
