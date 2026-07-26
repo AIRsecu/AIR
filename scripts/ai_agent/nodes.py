@@ -1,5 +1,4 @@
 import json
-from langchain_openai import ChatOpenAI
 from llm.provider import make_chat_llm
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
@@ -20,18 +19,6 @@ from tools import search_files, read_file_range
 # 0. Global Setup
 # ==========================================
 # 도구 탐색은 약간의 창의성이 필요하므로 temp 0.1, 판결/분석은 0 설정
-"""llm_agent= ChatOpenAI(
-    model="my-qwen",   # 모델명 (Qwen3.6:35B)
-    base_url="http://localhost:11434/v1", 
-    api_key="ollama",
-    temperature=0.1,
-)
-llm_strict= ChatOpenAI(
-    model="my-qwen",   # 모델명 (Qwen3.6:35B)
-    base_url="http://localhost:11434/v1", 
-    api_key="ollama",
-    temperature=0,
-)"""
 llm_agent = make_chat_llm(temperature=0.1) 
 llm_strict = make_chat_llm(temperature=0) 
 

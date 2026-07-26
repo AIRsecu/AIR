@@ -185,7 +185,7 @@ jobs:
   # 4. 결과 집계 및 보안 게이트
   # ==========================================
   summary:
-    needs: [semgrep, trivy, zap, schemathesis]
+    needs: [semgrep, codeql, trivy, zap, schemathesis]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -201,7 +201,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: semgrep-results
-          path: reports/semgrep
+          path: reports/sem grep
+
+      - name: Download CodeQL Report
+        uses: actions/download-artifact@v4
+        with:
+          name: codeql-results
+          path: reports/codeql
 
       - name: Download Trivy Report
         uses: actions/download-artifact@v4
@@ -228,7 +234,6 @@ jobs:
           python scripts/extract_codeql.py
           python scripts/extract_trivy.py
           python scripts/extract_zap.py
-          python scripts/parse_schemathesis.py
 
       # 4. AI 에이전트 전용 독립 환경 구성 (scripts/ai_agent/requirements.txt 사용)
       - name: Install AI Dependencies
@@ -273,7 +278,6 @@ jobs:
             reports/codeql/codql_for_llm.json
             reports/trivy/trivy_for_llm.json
             reports/zap/zap_for_llm.json
-            reports/openapi/schemathesis_for_llm.json
 
       # 8. Security Gate 통제 로직
       - name: Run Security Gate
