@@ -108,10 +108,35 @@ jobs:
           if-no-files-found: error
 
   # ==========================================
+  # 4. schemathesis
+  # ==========================================
+  schemathesis:
+    name: Schemathesis API Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Schemathesis
+        run: pip install schemathesis
+
+      - name: Run Schemathesis
+        run: |
+          chmod +x scripts/security/run-schemathesis.sh
+          ./scripts/security/run-schemathesis.sh
+
+      - name: Upload Schemathesis Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemathesis-report
+          path: reports/openapi/
+
+  # ==========================================
   # 4. 결과 집계 및 보안 게이트
   # ==========================================
   summary:
-    needs: [semgrep, trivy, zap]
+    needs: [semgrep, trivy, zap, schemathesis]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
