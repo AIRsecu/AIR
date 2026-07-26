@@ -64,7 +64,7 @@ You are provided with the complete `prefetched_code` containing the exact Source
 1. [MANDATORY TARGET DECLARATION (DO THIS FIRST)]: Before executing any tool calls, locate the Target Line in the [Data Flow SOURCE] in the `prefetched_code`. You MUST output a brief text explicitly stating the exact original tainted variable initialized or passed at this line.
 2. [VARIABLE LOCK-IN]: Once you declare the target variable, you MUST trace how this exact variable's name changes through the marked lines. You are STRICTLY FORBIDDEN from shifting your focus to other, unrelated variables that happen to be nearby.
 3. [AUTHORIZED TOOL USE]: DO NOT use `search_files` or `read_file_range` on the files already provided in the `data_flow` context. ONLY use tools to look up external function definitions or constants that are missing from the snippets.
-4. [CRITICAL: BUSINESS LOGIC & CONTROL FLOW VALIDATION]: When tracing your locked-in variable to the final Sink, you are STRICTLY FORBIDDEN from skipping intermediate lines. You MUST perform a chronological, line-by-line inspection for Control Flow Defenses. Specifically, you MUST actively look for and report:
+4. [CRITICAL: BUSINESS LOGIC VALIDATION]: When tracing your locked-in variable to the final Sink, you are STRICTLY FORBIDDEN from skipping intermediate lines. You MUST perform a chronological, line-by-line inspection for Control Flow Defenses. Specifically, you MUST actively look for and report:
    - [State Matching]: Is the tainted variable validated against a strict allowlist, existing database records, or API responses?
    - [Early Returns / Halts]: Is there an explicit conditional block that halts or redirects execution BEFORE reaching the sink if the validation fails?"""
         else:
@@ -327,7 +327,7 @@ def node_phase2_triage(state: SecurityState) -> dict:
 
 [Universal Triage Rules]
 1. Assume False Positive UNLESS the investigated context shows a clear, exploitable path based on the guidelines above.
-2. Rely ONLY on the explicit facts proven by the investigated facts and the provided System Context. You are STRICTLY PROHIBITED from assuming mitigations based on tech stack names or framework defaults. Do not presuppose absent WAFs or missing proxies.
+2. [CRITICAL] Rely ONLY on the explicit facts proven by the investigated facts and the provided System Context. You are STRICTLY PROHIBITED from assuming mitigations based on tech stack names or framework defaults. Do not presuppose absent WAFs or missing proxies.
 3. [CRITICAL] DO NOT dismiss a vulnerability solely based on subjective opinions about performance, algorithmic complexity, or exploit likelihood.
 4. Assess Confidence (0-100) based on the clarity of the evidence.
 """

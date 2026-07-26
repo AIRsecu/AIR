@@ -40,7 +40,7 @@ if TRIVY_PATH.exists():
 
 OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-with open(OUTPUT_PATH, "w") as f:
+with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
     json.dump(extracted_vulns, f, indent=2)
 
 print(f"Extraction complete. {len(extracted_vulns)} vulnerabilities saved.")
