@@ -6,7 +6,7 @@
 > 그 위에 커밋/PR 단계의 **보안 CI/CD 파이프라인(SAST · SCA · DAST · Security Gate · 리포트 통합/AI 분석)** 을 결합한 **가장 완결된 형상**입니다.
 >
 > 런타임에선 공격을 스스로 **탐지 → 즉시 차단 → 인시던트 기록 → 위험도 산정 → Discord 경고 → (자동 소스패치)** 로 대응하고,
-> 빌드/PR 단계에선 **자동 보안 검증(스캔 → 게이트)** 을 수행합니다.
+> 빌드/PR 단계에선 **자동 보안 검증(스캔 → AI 분석 → 게이트)** 을 수행합니다.
 
 > ⚠️ 의도적 취약점을 포함한 **vuln-lab**. 격리 스택에서 신뢰 IP 로만 구동하세요. `.env`·`*.pem`·웹훅 URL은 **커밋 금지**.
 
@@ -20,7 +20,7 @@
 | **자율방어** | `com.shop.air` — `DetectionFilter` · `DefenseRegistry` · `IncidentService` · `DynamicRuleRegistry`. 플래그 토글(**기본 OFF=취약**), 공격 탐지 시 **자동 ON** |
 | **IR 자동대응 서비스** | `ir-automation/` (Python FastAPI `:8090`) — 앱 `IncidentService` → `IrForwarder` push → **TTL IP차단 · Discord · 주기 reconcile** |
 | **오케스트레이터** | `air-orchestrator/` — `responder.py` 자동 소스패치(격리 브랜치 `air/auto-patch/*`, **사람 리뷰 게이트**) |
-| **보안 CI/CD** | GitHub Actions — Semgrep(SAST) · Trivy(SCA/CVE) · OWASP ZAP(DAST) · **Security Gate** · 리포트 통합/Artifact + AI 분석 |
+| **보안 CI/CD** | GitHub Actions — Semgrep(SAST) · CodeQL(AST-based SAST) · Trivy(SCA/CVE) · OWASP ZAP(DAST) · Schemathesis(API Fuzzing) · **Security Gate** · 리포트 통합/Artifact + AI 분석 |
 | **리포트 계약** | `reports/contract/` — 스캐너별 결과를 공통 Finding 계약으로 정규화 · SBOM · LLM 분석 seam |
 
 ---
@@ -63,26 +63,50 @@ GET  /api/v1/air/rules  · POST · DELETE /rules/{id}   # 런타임 동적 룰
 
 ---
 
-## 보안 CI/CD 파이프라인
+## 보안 CI/CD 파이프라인 (Secure CI & AI DevSecOps)
 
-GitHub Actions 기반 **병렬 보안 스캔 + Security Gate** 자동화. vuln-lab 에 대해 **SAST · SCA · DAST** 를 병렬 수행하고,
-결과를 통합 분석하여 Build/PR 단계에서 위험 기반 검증을 수행한다(Shift Left).
+GitHub Actions 기반 **병렬 보안 스캔, AI 자율 검증 및 Security Gate** 자동화. vuln-lab 환경에 대해 **SAST · Advanced SAST · Dependency Scan · DAST · API Fuzzing**을 병렬 수행하고, LangGraph 기반 **AI 에이전트가 오탐(False Positive)을 자율적으로 분석·검증**하여 Build/PR 단계에서 신뢰도 높은 위험 기반 검증을 수행합니다(Shift Left).
 
 ```text
-        Git Push / Pull Request
-                  │
-          GitHub Actions Workflow
-     ┌────────────┼────────────┐
-     ▼            ▼            ▼
-  Semgrep       Trivy      OWASP ZAP
-  (SAST)     (SCA/CVE)   (DAST/Runtime)
-     └────────────┼────────────┘
-                  ▼
-        Security Summary (Severity/Findings)
-                  ▼
-        Security Gate (Build / PR Validation)
-                  ▼
-              Build Validation
+                ┌──────────────────────────────┐
+                │ Git Push / Pull Request      │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ GitHub Actions Workflow      │
+                └──────────────┬───────────────┘
+  ┌───────────────┬────────────┼────────────┬───────────────┐ 
+  ▼               ▼            ▼            ▼               ▼
+┌─────────┐ ┌─────────┐ ┌────────────┐ ┌─────────┐ ┌──────────────┐
+│ Semgrep │ │ CodeQL  │ │ Trivy      │ │ ZAP     │ │ Schemathesis │
+│ SAST    │ │ Adv.SAST│ │ Dependency │ │ DAST    │ │ API Fuzzing  │
+└─────────┘ └─────────┘ └────────────┘ └─────────┘ └──────────────┘
+  │               │            │            │               │
+  └───────────────┴────────────┼────────────┴───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Data Extraction (Lightweight)│
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │    AI Agentic Validation     │
+                │ (LangGraph 7-Phase Pipeline) │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Integrated Security Summary  │
+                │ AI Final Report & Findings   │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Security Gate                │
+                │ Build / PR Validation        │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Build Validation             │
+                └──────────────────────────────┘
+
 ```
 
 **병렬 보안 스캔**
@@ -90,14 +114,28 @@ GitHub Actions 기반 **병렬 보안 스캔 + Security Gate** 자동화. vuln-l
 | Scanner | 역할 |
 |---|---|
 | Semgrep | 정적 코드 분석(SAST) |
+| CodeQL | 소스 코드부터 취약점 발생 지점까지의 Data Flow 심층 추적(AST-based SAST) |
 | Trivy | Dependency / Image CVE 검사(SCA) |
 | OWASP ZAP | 인증 세션 Spider + Active Scan(SQLi·XSS 등, DAST) |
+| Schemathesis | OpenAPI(Swagger) 스펙 기반 API Fuzzing 테스트 |
 
 **ZAP 인증 스캔 흐름** — ZAP Automation Framework(`scripts/security/automation.yaml`)로 인증 세션 스캔.
 1. `run-zap.sh` 가 admin 로그인 → JWT 발급.
 2. 스캔용 테넌트·customer 를 API로 생성 후 customer JWT 발급(CI DB 는 ephemeral, 매 실행 재생성).
 3. ZAP 컨테이너에 `ZAP_CUSTOMER_TOKEN` 주입 → Replacer 규칙이 모든 요청에 `Authorization: Bearer <token>` 삽입.
 4. Spider → Passive → Active Scan(SQLi·XSS 페이로드) → JSON 리포트.
+
+**AI 자율 검증 파이프라인 (LangGraph)**
+
+스캐너의 맹목적인 경고를 불신(Zero-Trust)하며, 단일 책임 원칙(SRP)에 따라 7개의 독립된 노드가 오탐을 판별하고 해결책을 제시합니다.
+
+1. **[Phase 1] 탐색가 (Explorer):** 스캐너 종류에 맞춰 도구(`search_files`, `read_file_range`)를 자율 사용하여 팩트(코드 요약, 감사 추적 로그) 수집
+2. **[Phase 2] 오탐 판별기 (Triage):** 수집된 증거를 바탕으로 프레임워크 방어 로직 등을 고려하여 오탐(FP) / 정탐(TP) 여부 판결
+3. **[Phase 3] 1차 검증기 (Logic Validator):** 탐색 도구 사용의 적절성과 판별 논리 교차 검증 (실패 시 타겟을 지정하여 원인 노드로 회귀)
+4. **[Phase 4] 근본 원인 분석기 (Root Cause):** 1차 검증을 통과한 정탐(TP)에 한해 근본 원인 도출 및 패치 코드 작성
+5. **[Phase 5] 2차 검증기 (Code Validator):** 수정 코드의 문법적 안전성 및 환각(Hallucination) 여부 검증
+6. **[Phase 6] 위험도 재평가 (Risk Assessor):** 인프라 및 비즈니스 임팩트를 고려하여 최종 위험도 산정
+7. **[Phase 7] 리포터 (Reporter):** 마크다운 형태의 통합 보고서 렌더링. 최대 재시도(Loop-back) 초과 시 서킷 브레이커(Circuit Breaker)가 발동하여 경고 배너 삽입
 
 **Security Gate**
 
@@ -107,8 +145,13 @@ GitHub Actions 기반 **병렬 보안 스캔 + Security Gate** 자동화. vuln-l
 | High 임계치 초과 | PR Block |
 | Blocking Rule 탐지 | Workflow 중단 |
 
+
 **Summary & Artifact** — 각 스캐너 결과를 통합해 Severity Count · Findings Summary · Security Status 를 자동 생성·Artifact 저장.
 리포트 계약(`reports/contract/`)으로 정규화 후 **AI(LLM) 분석 seam** 에 전달.
+
+* Severity Count & Findings Summary
+* Scanner Raw & Extracted JSON
+* AI Final Markdown Report (오탐 여부, 원인 분석, 권장 패치 코드 포함)
 
 ---
 
@@ -124,9 +167,9 @@ project-root/
 ├── air-attack/                  # 공격 시나리오 스크립트 (attack.py: 8종)
 ├── reports/                     # 스캔 결과 + contract(정규화·SBOM·LLM seam)
 ├── scripts/
-│   ├── security/                # run-semgrep/trivy/zap.sh · automation.yaml
+│   ├── security/                # run-semgrep/trivy/zap/schemathesis.sh · automation.yaml
 │   ├── generate_summary.py      # 스캐너 결과 통합 요약
-│   └── ai_agent/ · llm/         # AI 분석 파이프라인
+│   └── ai_agent/ · llm/         # LangGraph 기반 AI 분석 파이프라인
 ├── docs/                        # 보안 문서
 ├── docker-compose.lab.yml       # vuln-lab 스택 (nginx :8081 + backend + ir-automation)
 └── .github/workflows/
