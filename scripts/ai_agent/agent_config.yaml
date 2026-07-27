@@ -1,0 +1,161 @@
+paths:
+  sandbox_root: "."
+
+limits:
+  max_results: 5
+  max_search_file_bytes: 5242880   # 5 MiB
+  max_read_file_bytes: 524288      # 512 KiB
+  max_patch_file_bytes: 524288     # 512 KiB
+  read_chunk_bytes: 65536          # 64 KiB
+  max_read_range_lines: 300
+
+patch:
+  preserve_file_mode: true
+  enable_backup: true
+  keep_backup_on_success: true
+  backup_suffix: ".bak"
+  retry_count: 1
+  retry_delay_ms: 200
+
+logging:
+  level: WARNING
+
+encoding:
+  default: utf-8
+  read_errors: ignore
+
+exclude_dirs:
+  Test_Report_Folders:
+    - sample_reports
+    - reports
+  dependency:
+    - node_modules
+    - venv
+    - .venv
+    - env
+    - vendor
+    - packages
+    - .terraform
+    - .gradle
+    - .mvn
+    - .bundle
+  build_cache:
+    - dist
+    - build
+    - out
+    - target
+    - bin
+    - obj
+    - __pycache__
+    - .next
+    - .nuxt
+    - .svelte-kit
+    - .astro
+    - .turbo
+    - .nx
+    - .mypy_cache
+    - .ruff_cache
+    - .pytest_cache
+    - .tox
+    - .egg-info
+    - cdk.out
+    - .serverless
+    - .dart_tool
+    - coverage
+    - vcpkg_installed
+    - build/_deps
+    - DerivedData
+    - .cxx
+  system:
+    - .git
+    - .svn
+    - .hg
+    - .idea
+    - .vscode
+    - .fleet
+    - .zed
+    - logs
+    - tmp
+    - temp
+    - storage
+
+exclude_extensions:
+  - .db
+  - .sqlite
+  - .sqlite3
+  - .bak
+  - .jar
+  - .class
+
+allowed_extensions:
+  source_code:
+    - .js
+    - .ts
+    - .jsx
+    - .tsx
+    - .cjs
+    - .mjs
+    - .py
+    - .java
+    - .kt
+    - .scala
+    - .php
+    - .phtml
+    - .go
+    - .cs
+    - .rb
+    - .rs
+    - .c
+    - .cpp
+    - .h
+    - .html
+    - .sql
+    - .tf
+  templates:
+    - .ejs
+    - .hbs
+    - .pug
+    - .njk
+  config:
+    - .yml
+    - .yaml
+    - .json
+    - .ini
+    - .conf
+    - .cfg
+    - .toml
+    - .properties
+    - .xml
+
+allowed_filenames:
+  - Dockerfile
+  - Containerfile
+  - Makefile
+
+exclude_files:
+  - package-lock.json
+  - yarn.lock
+  - pnpm-lock.yaml
+  - bun.lockb
+  - poetry.lock
+  - Pipfile.lock
+  - uv.lock
+  - composer.lock
+  - Gemfile.lock
+  - Cargo.lock
+  - go.sum
+  - packages.lock.json
+  - .terraform.lock.hcl
+  - .env
+  - .env.local
+  - .env.production
+  - .env.development
+  - .env.test
+
+minified_suffixes:
+  - .min.js
+  - .min.css
+
+os_junk_files:
+  - .DS_Store
+  - Thumbs.db
