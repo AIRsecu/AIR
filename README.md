@@ -1,229 +1,190 @@
-# Swagger & Schemathesis API Security Testing
+# Secure CI Pipeline
 
-## 📌 Overview
-
-OpenAPI Specification 기반 API 보안 테스트를 위해 Swagger(OpenAPI)와 Schemathesis를 연동합니다.
-
-기존 보안 스캐너(Semgrep, Trivy, ZAP)는 코드 취약점, 의존성 취약점, 웹 취약점 탐지에 집중되어 있으며 API 명세 기반 요청/응답 검증에는 한계가 있습니다.
-
-Schemathesis를 추가하여 OpenAPI 명세를 기반으로 자동 API 테스트를 수행하고, 테스트 결과를 LLM 분석용 JSON 데이터로 변환합니다.
+> GitHub Actions 기반 병렬 보안 스캔 및 Security Gate 자동화.
+> vuln-lab 환경에 대해 **SAST · Dependency Scan · DAST** 를 병렬 수행하고,
+> 결과를 통합 분석하여 Build/PR 단계에서 위험 기반 검증을 수행합니다.
 
 ---
 
-## 🎯 Purpose
+## 구성 목적
 
-- OpenAPI Specification 기반 API 자동 테스트
-- API Request / Response Contract 검증
-- 예상하지 못한 응답 및 예외 처리 탐지
-- LLM 기반 보안 분석을 위한 결과 데이터 생성
-
----
-
-## 🔧 Components
-
-### 1. Swagger / OpenAPI
-
-Springdoc OpenAPI를 통해 Spring Boot API 명세를 생성합니다.
-
-#### OpenAPI Document
-
-Backend 실행 후 확인: http://localhost:8080/v3/api-docs
-
-Swagger UI: http://localhost:8080/swagger-ui/index.html
+* 보안 검사를 CI 단계로 이동(Shift Left)
+* 병렬 스캔 기반 Pipeline 최적화
+* Severity 기반 Security Gate 적용
+* 취약점 결과 통합 및 Artifact 관리
 
 ---
 
-### 2. Schemathesis
+## 기술 스택
 
-Schemathesis는 OpenAPI Specification을 기반으로 API 요청을 생성하고,
-실제 API 응답이 명세와 일치하는지 검증하는 API Contract Testing 도구입니다.
+| 영역              | 내용                        |
+| --------------- | ------------------------- |
+| CI              | GitHub Actions            |
+| SAST            | Semgrep                   |
+| Dependency Scan | Trivy                     |
+| DAST            | OWASP ZAP (인증 + Active Scan) |
+| Reporting       | GitHub Artifact / Summary |
 
 ---
 
-#### Installation
+## Pipeline 구조
 
-```bash
-pip install schemathesis
+```text id="o3m67u"
+                ┌──────────────────────────────┐
+                │ Git Push / Pull Request      │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ GitHub Actions Workflow      │
+                └──────────────┬───────────────┘
+        ┌──────────────────────┼──────────────────────┐ 
+        │                      │                      │
+        ▼                      ▼                      ▼
+┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
+│ Semgrep            │  │ Trivy              │  │ OWASP ZAP          │
+│ SAST / Static      │  │ Dependency /       │  │ DAST / Runtime     │
+│ Code Analysis      │  │ Image CVE          │  │ Scan               │
+└────────────────────┘  └────────────────────┘  └────────────────────┘
+        │                      │                      │
+        └──────────────────────┼──────────────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Security Summary             │
+                │ Severity & Findings Report   │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Security Gate                │
+                │ Build / PR Validation        │
+                └──────────────┬───────────────┘
+                               ▼
+                ┌──────────────────────────────┐
+                │ Build Validation             │
+                └──────────────────────────────┘
 ```
 
-설치 확인:
-```bash
-schemathesis --version
-```
+---
+
+## 병렬 보안 스캔
+
+각 보안 도구를 독립 Job 으로 분리하여 병렬 처리 구조 구성.
+
+| Scanner   | 역할                                        |
+| --------- | ----------------------------------------- |
+| Semgrep   | 정적 코드 분석                                  |
+| Trivy     | Dependency / Image CVE 검사                 |
+| OWASP ZAP | 인증된 세션으로 Spider + Active Scan (SQLi·XSS 등) |
 
 ---
 
-#### Local Execution
+## ZAP 인증 스캔 흐름
 
-Backend 실행 후 OpenAPI 명세 기반 테스트를 실행합니다.
+ZAP은 Automation Framework(`scripts/security/automation.yaml`)를 통해 인증된 세션으로 스캔한다.
 
-```bash
-./scripts/security/run-schemathesis.sh
-```
-
-스크립트 실행 과정:
-
-1. OpenAPI Schema 지정
-2. Schemathesis API 테스트 실행
-3. JUnit XML Report 생성
-4. XML 결과 JSON 변환
-5. LLM 분석용 JSON 생성
-
-수동 실행이 필요한 경우:
-
-/
-```bash
-schemathesis run \
-docs/openapi/openapi.json \
---url http://localhost:8080 \
---report-junit-path reports/openapi/schemathesis-report.xml
-```
-
-이유:
-- 지금은 단순 schemathesis 실행이 아니라 `run-schemathesis.sh`가 기준 실행점임
-- README와 실제 작업 방식 일치
-
+1. `run-zap.sh`가 admin 계정으로 로그인해 JWT를 발급받는다.
+2. 스캔용 테넌트·customer 계정을 API로 생성하고 customer JWT를 발급한다.
+   (CI DB는 ephemeral이므로 매 실행 시 재생성. BootstrapRunner는 admin만 생성하므로 직접 생성 필요.)
+3. ZAP 컨테이너에 `ZAP_CUSTOMER_TOKEN` 환경변수로 JWT를 전달한다.
+4. `automation.yaml`의 Replacer 규칙이 모든 요청에 `Authorization: Bearer <token>` 헤더를 주입한다.
+5. Standard Spider → Passive Scan → Active Scan (SQLi·XSS 페이로드 주입) → JSON 리포트 순으로 실행된다.
 
 ---
 
-## Directory Structure
+## Security Gate
 
-```
-.
-├── docs
-│   └── openapi
-│       └── openapi.json
+Severity 기반 Build 검증 정책 적용.
+
+| 조건               | 동작          |
+| ---------------- | ----------- |
+| Critical 발견      | Build Fail  |
+| High 임계치 초과      | PR Block    |
+| Blocking Rule 탐지 | Workflow 중단 |
+
+---
+
+## Summary & Artifact
+
+각 스캐너 결과를 통합하여:
+
+* Severity Count
+* Findings Summary
+* Security Status
+
+를 자동 생성 및 Artifact 저장.
+
+---
+
+## 프로젝트 구조
+
+```text id="9zvr8m"
+project-root/
 │
-├── scripts
-│   └── security
-│       ├── run-schemathesis.sh
-│       └── parse_schemathesis.py
+├── .github/
+│   └── workflows/
+│       └── security.yml
 │
-└── reports
-    └── openapi
-        ├── schemathesis-report.xml
-        └── schemathesis_for_llm.json
-```
-
-
----
-
-## Script Description
-### run-schemathesis.sh
-
-Schemathesis 실행 및 결과 저장을 담당합니다.
-
-#### 수행 과정
-
-1. OpenAPI Schema 지정
-2. Schemathesis API 테스트 실행
-3. JUnit XML Report 생성
-4. XML 결과를 JSON으로 변환
-5. LLM 분석용 JSON 생성
-
-#### 생성 파일
-
-```
-reports/openapi/
-├── schemathesis-report.xml
-└── schemathesis_for_llm.json
-```
-
-### parse_schemathesis.py
-
-Schemathesis JUnit XML 결과에서 LLM 분석에 필요한 정보만 추출합니다.
-
-#### 추출정보
-| Field   | Description |
-| --- | --- |
-| test_case | 테스트 대상 API |
-| test_class | 테스트 그룹 |
-| status | 테스트 실패 상태 |
-| failure_type | failure/error 구분 |
-| error_message | 실패 원인 |
-| execution_time | 실행 시간 |
-
-#### Noise Filtering
-
-Schemathesis 결과 중 API 보안 분석 가치가 낮은 항목은 LLM 분석 대상에서 제외합니다.
-
-현재 제외 대상:
-- 일부 예상 가능한 HTTP Status Code 응답
-
-예: expected 405
-
-
-위 항목은 실제 API 취약점보다는 Framework의 HTTP Method 처리 정책 차이로 판단하여 제외합니다.
-
----
-
-## LLM Analysis Format
-
-#### 생성 파일
-
-```
-reports/openapi/schemathesis_for_llm.json
-```
-
-#### Example
-
-```json
-[
-  {
-    "test_case": "POST /api/login",
-    "test_class": "schemathesis",
-    "status": "failed",
-    "failure_type": "failure",
-    "error_message": "Response schema validation failed",
-    "execution_time": "0.421"
-  }
-]
+├── docs/
+│   └── security/
+│       ├── security.yml
+│       ├── overview.md
+│       ├── policy.md
+│       ├── workflow.md
+│       └── sec-summary.md
+│
+├── reports/
+│   ├── semgrep/
+│   ├── trivy/
+│   ├── zap/
+│   └── summary/
+│
+├── scripts/
+│   ├── security/
+│   │   ├── run-semgrep.sh
+│   │   ├── run-trivy.sh
+│   │   ├── run-zap.sh
+│   │   ├── automation.yaml    # ZAP Automation Framework 설정
+│   │   └── run-summary.sh
+│   │
+│   └── generate_summary.py
+│
+└── policy/
+    ├── security_gate.py
+    └── security_policy.json
 ```
 
 ---
 
-## 🚧 Current Status
+## Workflow Trigger
 
-### Completed
+```text id="my2ph4"
+push
+pull_request
 
-- Springdoc OpenAPI 설정
-- OpenAPI JSON 생성 확인
-- Schemathesis 실행 확인
-- JUnit XML Report 생성
-- Schemathesis 결과 JSON 변환
-- LLM 분석용 `schemathesis_for_llm.json` 생성
-- Schemathesis CI Job 분리
-- Backend Container Health Check 이후 테스트 실행
-- Schemathesis 결과 Artifact 저장
-
+branches:
+- main
+- dev
+- feature/**
+- feat/**
+```
 
 ---
 
-## 💡 Notes
+## 핵심 포인트
 
-- Schemathesis는 취약점 스캐너가 아닌 API Contract Testing 도구입니다.
-- CWE, CVSS 기반 취약점 탐지보다는 OpenAPI 명세 대비 비정상 요청/응답 검증을 목적으로 합니다.
-- Semgrep, Trivy, ZAP과 함께 사용하여 코드, 의존성, 웹, API 영역을 보완합니다.
-
-### CI Execution Note
-
-Schemathesis는 현재 CI Blocking 조건으로 사용하지 않습니다.
-
-이유:
-- 인증/인가 정책에 따른 정상적인 401/403 응답 존재
-- OpenAPI Contract Drift와 실제 API 취약점을 구분할 필요 존재
-
-현재 목적은 API Contract Test 결과 수집 및 LLM 기반 보안 분석 데이터 생성입니다.
-
+* SAST · DAST · CVE Scan 병렬 처리
+* Severity 기반 Merge/Build 제어
+* 통합 Security Summary 자동 생성
+* Security Validation 자동화 Workflow 구성
 
 ---
 
-이 버전은 현재 브랜치 상태 기준으로 맞췄습니다.
+## 향후 확장
 
-특히 수정한 부분:
-- ❌ "CI/CD 연결 완료"처럼 보이는 표현 제거
-- ❌ 아직 하지 않은 Security Gate 반영 표현 완화
-- ✅ 현재 완료된 Swagger + Schemathesis + JSON 추출까지만 기록
-- ✅ ZAP/Trivy/Semgrep과 같은 "LLM 분석 전처리 단계" 관점 유지
+* Discord / Slack Alert
+* Risk Score 연계
+* Runtime WAF 연동
+* 실시간 Security Dashboard
 
-이 상태로 PR에 README 추가해도 과장 없이 맞습니다.
+---
+
+*DevSecOps 기반 Secure CI Validation Workflow*
