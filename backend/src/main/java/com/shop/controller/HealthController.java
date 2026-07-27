@@ -18,7 +18,7 @@ public class HealthController {
     private String appName;
 
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> health() {
+    public ResponseEntity<Map<String, String>> health() {
         return ResponseEntity.ok(Map.of(
                 "status", "UP",
                 "app",    appName,

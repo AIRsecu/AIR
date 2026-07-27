@@ -38,6 +38,7 @@ public class ChargeRequestController {
     /** customer - 내 충전 요청 내역 */
     @GetMapping("/mine")
     public ResponseEntity<ApiResponse<List<ChargeRequest>>> mine(
+            @PathVariable String tenantId,
             @AuthenticationPrincipal User actor) {
         return ResponseEntity.ok(ApiResponse.ok(service.listMine(actor)));
     }
