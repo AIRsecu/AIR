@@ -104,7 +104,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: reports/zap/zap-report.json
+          path: reports/zap/
           if-no-files-found: error
 
   # ==========================================
@@ -116,12 +116,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Start Backend
-        env:
-          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
-          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
-        run: docker compose up -d
 
       - name: Check Backend Env Exists
         if: always()
