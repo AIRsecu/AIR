@@ -21,9 +21,9 @@
 
 | 위치 | 역할 |
 |------|------|
-| `UploadService.java:45 (@a94a8dd)` `store` | `autoDetect(raw, "UPLOAD_MALICIOUS_FILE", true)` — `checkExt=true` |
-| `UploadService.java:74 (@a94a8dd)` `read` | `autoDetect(name, "UPLOAD_PATH_TRAVERSAL", false)` — `checkExt=false` |
-| `UploadService.java:94 (@a94a8dd)` `autoDetect` | `air.detection` ON · 가드 OFF일 때만 report |
+| `UploadService#store` | `autoDetect(raw, "UPLOAD_MALICIOUS_FILE", true)` — `checkExt=true` |
+| `UploadService#read` | `autoDetect(name, "UPLOAD_PATH_TRAVERSAL", false)` — `checkExt=false` |
+| `UploadService#autoDetect` | `air.detection` ON · 가드 OFF일 때만 report |
 
 > 이 경로의 `report(..., clientIp=null, …)` 이므로 IR IP 차단은 `SKIPPED_NO_IP` 일 수 있다.  
 > **1차 방어는 업로드 가드 arming**이며, IR는 기록·(IP 있을 때) 2차 격리.

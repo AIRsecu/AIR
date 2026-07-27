@@ -12,7 +12,7 @@
 
 > **Base score SSOT**: `RiskScoring.java` ↔ `ir/analyzer/risk.py::_SCORE` 1:1 parity
 
-> **레이트리밋 상수** (@a94a8dd 기준):
+> **레이트리밋 상수** (`DetectionFilter` as-implemented):
 > - `RATE_LIMIT = 30` (창당 API 요청)
 > - `WINDOW_MS = 10_000` (10초 창)
 > - 위치: `backend/.../DetectionFilter.java`
@@ -30,7 +30,7 @@ IR 파이프라인은 다른 유형과 같이 HIGH면 차단 후보이나, **플
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:147 (@a94a8dd)` | `/api/v1/`(제어플레인 제외) IP별 hit > `RATE_LIMIT` |
+| `DetectionFilter#doFilterInternal` | `/api/v1/`(제어플레인 제외) API rate > `RATE_LIMIT` |
 | report 조건 | detection ON · ddos rate-guard **OFF** |
 | 가드 ON | `429 RATE_LIMITED` |
 

@@ -18,8 +18,8 @@
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:178 (@a94a8dd)` | `GET` + product search URI · `SQLI_SIGNATURE` → `report("SQLI_ATTEMPT", …)` |
-| `IncidentService.java` (~43–80) | 가드 arming · DB 기록 · Discord(앱) · `IrForwarder` → IR `/ingest` |
+| `DetectionFilter#doFilterInternal` | `GET` + product search URI · `SQLI_SIGNATURE` → `report("SQLI_ATTEMPT", …)` |
+| `IncidentService#report` | 가드 arming · DB 기록 · Discord(앱) · `IrForwarder` → IR `/ingest` |
 
 가드 OFF일 때만 시그니처 탐지 경로가 의미 있다(탐지 ON + 가드 OFF = 취약 재현·자동 arming).
 
@@ -134,7 +134,7 @@ ${INCIDENT_STORAGE_PATH:-./incidents}/<id>.json
 poetry run pytest ir-automation/tests -q
 # → IR suite green 확인 (작성 시점 N passed)
 
-poetry run pytest ir-automation/tests/test_risk.py -q  # score parity
+poetry run pytest ir-automation/tests/test_risk.py -q  # IR _SCORE 회귀(하드코딩 기대값)
 ```
 
 ### DAST 통합 (담당: gdmctb4614)

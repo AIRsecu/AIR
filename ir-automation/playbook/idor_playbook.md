@@ -18,7 +18,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `OrderService.java:53 (@a94a8dd)` `getByIdAuthorized` | 비소유 접근 + `air.detection` ON → `report("IDOR_ATTEMPT", …)` |
+| `OrderService#getByIdAuthorized` | 비소유 접근 + `air.detection` ON → `report("IDOR_ATTEMPT", …)` |
 | 가드 ON | `AppException.forbidden` 로 같은 요청부터 차단 |
 | 가드 OFF | 취약: 타인 주문 반환 (데모용) |
 

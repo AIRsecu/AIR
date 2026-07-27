@@ -12,7 +12,7 @@
 
 > **Base score SSOT**: `RiskScoring.java` ↔ `ir/analyzer/risk.py::_SCORE` 1:1 parity
 
-> **임계 상수** (@a94a8dd 기준):
+> **임계 상수** (`DetectionFilter` as-implemented):
 > - `MASSDELETE_LIMIT = 5` (DELETE 창당 허용)
 > - `WINDOW_MS = 10_000` (10초 창)
 > - 위치: `backend/.../DetectionFilter.java`
@@ -24,7 +24,7 @@
 
 | 위치 | 역할 |
 |------|------|
-| `DetectionFilter.java:162 (@a94a8dd)` | API DELETE 카운트 > `MASSDELETE_LIMIT` |
+| `DetectionFilter#doFilterInternal` | API DELETE 카운트 > `MASSDELETE_LIMIT` |
 | 탐지 조건 | `air.detection` ON · massdelete-guard **OFF** 일 때 report |
 | 가드 ON | `429 MASS_DELETE_BLOCKED` 즉시 반환 |
 

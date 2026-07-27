@@ -84,24 +84,20 @@
 1. `RiskScoring.java` + `ir/analyzer/risk.py::_SCORE` 동시 갱신 (parity 필수)
 2. 본 README 인덱스 표 갱신
 3. 유형별 playbook 문서 신설 (기존 8종 구조 준수)
-4. 파일:라인 인용부는 작성 시점 커밋 앵커 명시
+4. 백엔드 인용은 `Class#method` + 맥락 기준으로 명시
 
-## 커밋 앵커 정책
+## 인용 정책
 
-각 문서의 `@<short-sha>`는 **문서 작성 시점 검증 기준**입니다.  
-리팩터로 라인 밀림 시 하단 `rg` 명령으로 재확인 후 patch-set 갱신.
+- 백엔드 인용은 `file:line` 대신 **`Class#method` + 동작 맥락**을 기본으로 쓴다.
+- `DetectionFilter#doFilterInternal`, `DetectionFilter#detectNegativeQty`, `IncidentService#report`,
+  `OrderService#getByIdAuthorized`, `UploadService#store/read/autoDetect`처럼
+  리팩터에 덜 취약한 메서드명 기준을 우선한다.
+- 구현이 바뀌면 하단 grep으로 **호출부**를 재탐색해 문서를 갱신한다.
+- 참고: Java↔Python SSOT 대조는 별 트랙 (`test_ssot_risk_parity.py`). 본 문서의 `test_risk.py`는 IR 내부 `_SCORE` 회귀다.
 
-현재 문서 앵커: `@a94a8dd` (README 커밋 시점 short SHA로 pin).
+## 호출부 grep
 
-## 파일:라인 인용 정책
-
-- 각 문서의 백엔드 인용은 **작성 시점 커밋 앵커** 명시
-- 리팩터로 라인 밀림 → 본 README 하단 `rg` 명령으로 재확인
-- 대량 밀림 시 patch-set으로 일괄 갱신
-
-## 트리거 라인 주의
-
-백엔드 `file:line` 은 작성 시점 grep 기준이다. 리팩터 후 어긋날 수 있으니 재확인:
+백엔드 호출부는 아래 grep으로 재확인:
 
 ```bash
 rg -n 'report\("(SQLI_ATTEMPT|XSS_ATTEMPT|IDOR_ATTEMPT|ORDER_NEGATIVE_QTY|UPLOAD_|RANSOM_MASSDELETE|DDOS_FLOOD)' backend --type java
