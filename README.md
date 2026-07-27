@@ -58,10 +58,30 @@ schemathesis --version
 Backend 실행 후 OpenAPI 명세 기반 테스트를 실행합니다.
 
 ```bash
+./scripts/security/run-schemathesis.sh
+```
+
+스크립트 실행 과정:
+
+1. OpenAPI Schema 지정
+2. Schemathesis API 테스트 실행
+3. JUnit XML Report 생성
+4. XML 결과 JSON 변환
+5. LLM 분석용 JSON 생성
+
+수동 실행이 필요한 경우:
+
+/
+```bash
 schemathesis run \
 docs/openapi/openapi.json \
---url http://localhost:8080
+--url http://localhost:8080 \
+--report-junit-path reports/openapi/schemathesis-report.xml
 ```
+
+이유:
+- 지금은 단순 schemathesis 실행이 아니라 `run-schemathesis.sh`가 기준 실행점임
+- README와 실제 작업 방식 일치
 
 
 ---
@@ -82,7 +102,6 @@ docs/openapi/openapi.json \
 └── reports
     └── openapi
         ├── schemathesis-report.xml
-        ├── schemathesis.log
         └── schemathesis_for_llm.json
 ```
 
@@ -99,16 +118,15 @@ Schemathesis 실행 및 결과 저장을 담당합니다.
 1. OpenAPI Schema 지정
 2. Schemathesis API 테스트 실행
 3. JUnit XML Report 생성
-4. 실행 로그 저장
-5. XML 결과를 JSON으로 변환
+4. XML 결과를 JSON으로 변환
+5. LLM 분석용 JSON 생성
 
 #### 생성 파일
 
 ```
 reports/openapi/
-
 ├── schemathesis-report.xml
-└── schemathesis.log
+└── schemathesis_for_llm.json
 ```
 
 ### parse_schemathesis.py
@@ -125,6 +143,17 @@ Schemathesis JUnit XML 결과에서 LLM 분석에 필요한 정보만 추출합�
 | error_message | 실패 원인 |
 | execution_time | 실행 시간 |
 
+#### Noise Filtering
+
+Schemathesis 결과 중 API 보안 분석 가치가 낮은 항목은 LLM 분석 대상에서 제외합니다.
+
+현재 제외 대상:
+- 일부 예상 가능한 HTTP Status Code 응답
+
+예: expected 405
+
+
+위 항목은 실제 API 취약점보다는 Framework의 HTTP Method 처리 정책 차이로 판단하여 제외합니다.
 
 ---
 
@@ -158,20 +187,14 @@ reports/openapi/schemathesis_for_llm.json
 ### Completed
 
 - Springdoc OpenAPI 설정
--  OpenAPI JSON 생성 확인
+- OpenAPI JSON 생성 확인
 - Schemathesis 실행 확인
 - JUnit XML Report 생성
 - Schemathesis 결과 JSON 변환
-
-
----
-
-## 🚀 Next Step
-
-- GitHub Actions security.yml 추가
-- Schemathesis 결과 Artifact 업로드
-- 기존 보안 파이프라인 결과와 통합 검토
-- Security Gate 적용 검토
+- LLM 분석용 `schemathesis_for_llm.json` 생성
+- Schemathesis CI Job 분리
+- Backend Container Health Check 이후 테스트 실행
+- Schemathesis 결과 Artifact 저장
 
 
 ---
@@ -181,6 +204,17 @@ reports/openapi/schemathesis_for_llm.json
 - Schemathesis는 취약점 스캐너가 아닌 API Contract Testing 도구입니다.
 - CWE, CVSS 기반 취약점 탐지보다는 OpenAPI 명세 대비 비정상 요청/응답 검증을 목적으로 합니다.
 - Semgrep, Trivy, ZAP과 함께 사용하여 코드, 의존성, 웹, API 영역을 보완합니다.
+
+### CI Execution Note
+
+Schemathesis는 현재 CI Blocking 조건으로 사용하지 않습니다.
+
+이유:
+- 인증/인가 정책에 따른 정상적인 401/403 응답 존재
+- OpenAPI Contract Drift와 실제 API 취약점을 구분할 필요 존재
+
+현재 목적은 API Contract Test 결과 수집 및 LLM 기반 보안 분석 데이터 생성입니다.
+
 
 ---
 
