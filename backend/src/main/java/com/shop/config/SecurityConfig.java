@@ -46,6 +46,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/tenants").permitAll()
                 // 회원가입 요청 '제출'은 공개 (목록/승인/반려는 인증 필요)
                 .requestMatchers(HttpMethod.POST, "/api/v1/tenants/*/signup-requests").permitAll()
+                //swagger 명세서 생성
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 // 나머지 인증 필요
                 .anyRequest().authenticated()
             )

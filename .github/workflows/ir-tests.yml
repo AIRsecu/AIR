@@ -1,5 +1,7 @@
 # IR 자동대응 단위테스트 — 신규 additive 워크플로(방식 B).
 #   security.yml(JHyye 소유) 무수정. ir-automation/ 변경 시에만 실행.
+#   + SSOT 가드(test_ssot_risk_parity): 위험도 정본 RiskScoring.java 가 바뀌어도
+#     돌도록 해당 Java 소스 경로를 paths 에 포함(어느 한쪽만 바뀌면 CI 실패).
 name: IR Automation Tests
 
 on:
@@ -7,11 +9,13 @@ on:
     branches: [dev, main, "feat/**", "feature/**"]
     paths:
       - "ir-automation/**"
+      - "backend/src/main/java/com/shop/air/RiskScoring.java"
       - ".github/workflows/ir-tests.yml"
   pull_request:
     branches: [dev, main]
     paths:
       - "ir-automation/**"
+      - "backend/src/main/java/com/shop/air/RiskScoring.java"
       - ".github/workflows/ir-tests.yml"
 
 jobs:
