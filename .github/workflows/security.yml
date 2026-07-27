@@ -232,7 +232,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: semgrep-results
-          path: reports/sem grep
+          path: reports/semgrep
 
       - name: Download CodeQL Report
         uses: actions/download-artifact@v4

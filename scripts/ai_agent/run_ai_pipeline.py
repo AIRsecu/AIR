@@ -45,7 +45,6 @@ def _record(scan_tool: str, vuln: dict, final_state: dict):
         # Pydantic 객체일 경우 model_dump() 호출. 오탐(FP) 등으로 None일 경우 빈 딕셔너리 처리
         "triage": triage.model_dump() if triage else {},
         "root_cause": root_cause.model_dump() if root_cause else {},
-        "validation": validation.model_dump() if validation else {},
         "assessment": risk.model_dump() if risk else {},
     })
 
