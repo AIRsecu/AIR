@@ -117,16 +117,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check Backend Env Exists
-        if: always()
-        run: |
-          docker exec shop-backend sh -c '
-            if [ -n "$JWT_ACCESS_SECRET" ]; then
-              echo "JWT_ACCESS_SECRET exists"
-            else
-              echo "JWT_ACCESS_SECRET missing"
-            fi
-          '
+      - name: Start Backend
+        env:
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+        run: docker compose up -d
 
       - name: Wait Backend Health
         run: |
