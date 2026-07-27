@@ -117,6 +117,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Start Backend
+        run: docker compose up -d
+
+
+      - name: Wait Backend Health
+        run: |
+          timeout 120 bash -c '
+            until curl -f http://localhost:8080/healthz; do
+              echo "Waiting for backend..."
+              sleep 5
+            done
+          '
+
       - name: Install Schemathesis
         run: pip install schemathesis
 
@@ -133,7 +146,7 @@ jobs:
           path: reports/openapi/
 
   # ==========================================
-  # 4. 결과 집계 및 보안 게이트
+  # 5. 결과 집계 및 보안 게이트
   # ==========================================
   summary:
     needs: [semgrep, trivy, zap, schemathesis]
@@ -165,6 +178,12 @@ jobs:
         with:
           name: zap-report
           path: reports/zap
+      
+      - name: Download Schemathesis Report
+        uses: actions/download-artifact@v4
+        with:
+          name: schemathesis-report
+          path: reports/openapi
 
       # 2. 기존 통계 Summary 생성
       - name: Generate Security Summary
@@ -221,6 +240,7 @@ jobs:
             reports/semgrep/semgrep_for_llm.json
             reports/trivy/trivy_for_llm.json
             reports/zap/zap_for_llm.json
+            reports/openapi/schemathesis_for_llm.json
 
       # 8. Security Gate 통제 로직
       - name: Run Security Gate

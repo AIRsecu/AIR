@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 SCHEMA_PATH="docs/openapi/openapi.json"
 BASE_URL="${SCHEMATHESIS_BASE_URL:-http://localhost:8080}"
@@ -16,10 +16,12 @@ schemathesis run \
   "$SCHEMA_PATH" \
   --url "$BASE_URL" \
   --report-junit-path "$REPORT_DIR/schemathesis-report.xml" \
-  | tee "$REPORT_DIR/schemathesis.log"
+|| SCHEMATHESIS_EXIT_CODE=$?
+
 
 echo "Convert XML to JSON..."
 
 python3 scripts/parse_schemathesis.py
 
 echo "Schemathesis finished."
+exit $SCHEMATHESIS_EXIT_CODE

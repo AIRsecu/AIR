@@ -37,12 +37,14 @@ public class OrderController {
     /** customer – 내 주문 목록 */
     @GetMapping("/my")
     public ResponseEntity<ApiResponse<List<Order>>> listMine(
+            @PathVariable String tenantId,
             @AuthenticationPrincipal User actor) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.listByCustomer(actor.getId())));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Order>> get(
+            @PathVariable String tenantId,
             @PathVariable String id,
             @AuthenticationPrincipal User actor) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.getByIdAuthorized(id, actor)));
@@ -62,6 +64,7 @@ public class OrderController {
     /** admin – 주문 상태 변경 */
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<Void>> updateStatus(
+            @PathVariable String tenantId,
             @PathVariable String id,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User actor) {

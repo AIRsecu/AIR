@@ -75,8 +75,9 @@ docs/openapi/openapi.json \
 │       └── openapi.json
 │
 ├── scripts
-│   ├── run-schemathesis.sh
-│   └── parse_schemathesis.py
+│   └── security
+│       ├── run-schemathesis.sh
+│       └── parse_schemathesis.py
 │
 └── reports
     └── openapi
