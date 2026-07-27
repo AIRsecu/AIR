@@ -36,6 +36,7 @@ for trivy_path in sorted(TRIVY_DIR.glob("*.json")):
                 summary["trivy_critical"] += 1
             elif severity == "HIGH":
                 summary["trivy_high"] += 1
+
 if ZAP_PATH.exists():
     with open(ZAP_PATH) as f:
         zap_data = json.load(f)
@@ -43,14 +44,8 @@ if ZAP_PATH.exists():
     sites = zap_data.get("site", [])
 
     if sites:
-        for alert in sites[0].get(
-            "alerts",
-            [],
-        ):
-            risk = alert.get(
-                "riskdesc",
-                "",
-            )
+        for alert in sites[0].get("alerts", [], ):
+            risk = alert.get("riskdesc", "", )
             if "High" in risk:
                 summary["zap_high"] += 1
             elif "Medium" in risk:
