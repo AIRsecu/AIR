@@ -31,7 +31,7 @@ def _record(scan_tool: str, vuln: dict, final_state: dict):
     risk = final_state.get("risk_assessment")
 
     # 대상 파일 경로 추출의 파편화 방지
-    target_path = vuln.get("file_path") or vuln.get("package_name") or "Unknown"
+    target_path = vuln.get("file_path") or vuln.get("package_name") or vuln.get("test_case") or "Unknown"
     if scan_tool == "DAST" and vuln.get("affected_targets"):
         target_path = vuln["affected_targets"][0].get("url", "Unknown")
 

@@ -14,10 +14,10 @@ if ZAP_PATH.exists():
 
     sites = zap_data.get("site", [])
     
-    if sites:
-        for alert in sites[0].get("alerts", []):
+    for site in sites:
+        for alert in site.get("alerts", []):
             risk_desc = alert.get("riskdesc", "")
- 
+
             # 해당 취약점이 발견된 모든 URI(공격 타겟) 목록 추출
             affected_urls = []
             for instance in alert.get("instances", []):
